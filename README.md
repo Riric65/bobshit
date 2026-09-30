@@ -92,7 +92,7 @@ true/vrai   false/faux       nil/null/none/rien
 
 ## Compiler
 
-Une seule dépendance : un compilateur C11 et `libm`.
+`bobshit 0.1.0`, une seule dépendance : un compilateur C11 et `libm`.
 
 ```sh
 git clone https://github.com/Riric65/bobshit.git

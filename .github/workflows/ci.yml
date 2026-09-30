@@ -116,7 +116,11 @@ jobs:
           set -eux
           cd lang
           make clean
-          make CFLAGS="-std=c11 -g -O1 -fsanitize=address,undefined -fno-sanitize-recover=all -Wall -Wextra"
+          # LDFLAGS must carry the sanitizer too, otherwise the link fails on
+          # the missing __asan_* symbols
+          make \
+            CFLAGS="-std=c11 -g -O1 -fsanitize=address,undefined -fno-sanitize-recover=all -Wall -Wextra" \
+            LDFLAGS="-fsanitize=address,undefined"
 
       - name: regression suite under sanitizers
         env:
@@ -163,13 +167,18 @@ jobs:
       - name: python parses
         run: python3 -m py_compile lang/tests/fuzz.py
 
-      - name: the version is defined once
+      - name: the version is defined once and stays in sync
         run: |
           set -eux
           ver=$(sed -n 's/^#define BS_VERSION "\(.*\)"$/\1/p' lang/include/common.h)
           test -n "$ver"
-          grep -q "$ver" lang/README.md
           echo "version: $ver"
+          # the binary, the man page and both READMEs must agree
+          make -C lang >/dev/null
+          test "$(./lang/bobshit --version)" = "bobshit $ver"
+          grep -qE "^\.TH BOBSHIT 1 .*BobShit $ver" lang/docs/bobshit.1
+          grep -q "$ver" lang/README.md
+          grep -q "$ver" README.md
 
       - name: no build artefact is tracked
         run: |
