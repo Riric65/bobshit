@@ -626,10 +626,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: v${{ needs.verify.outputs.version }}
+          VER: ${{ needs.verify.outputs.version }}
         run: |
-          set -eux
+          set -eu
           cd all
           sha256sum -c SHASUMS256.txt
+
           shopt -s nullglob
           assets=()
           # bobshit* and not bobshit-*: the .deb is named with an underscore,
@@ -638,34 +640,64 @@ jobs:
           assets+=(SHASUMS256.txt)
           echo "assets to publish: ${#assets[@]}"
           printf '  %s\n' "${assets[@]}"
-          # idempotent: a re-run updates the existing release instead of
-          # failing because the tag already has one
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "branch: the release $TAG already exists, updating it"
-            gh release upload "$TAG" "${assets[@]}" --clobber
-            gh release edit "$TAG" \
-              --title "BobShit ${{ needs.verify.outputs.version }}" \
-              --notes-file "$RUNNER_TEMP/notes.md"
+
+          # The REST API is used directly instead of `gh release create`:
+          # every response is inspected, so a silent no-op becomes a loud
+          # error instead of a green job with no release.
+          api="https://api.github.com/repos/$GITHUB_REPOSITORY"
+          auth=(-H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json")
+          body=$(jq -Rs . < "$RUNNER_TEMP/notes.md")
+
+          id=$(curl -sS "${auth[@]}" "$api/releases/tags/$TAG" | jq -r '.id // empty')
+          if [ -n "$id" ] && [ "$id" != "null" ]; then
+            echo "the release $TAG exists (id $id), updating it"
+            resp=$(curl -sS -X PATCH "${auth[@]}" \
+                     -d "$(jq -n --arg t "$TAG" --arg n "BobShit $VER" --arg b "$body" \
+                           '{tag_name:$t, name:$n, body:$b, draft:false, prerelease:false}')" \
+                     "$api/releases/$id")
           else
-            echo "branch: creating the release $TAG"
-            gh release create "$TAG" \
-              --title "BobShit ${{ needs.verify.outputs.version }}" \
-              --notes-file "$RUNNER_TEMP/notes.md" \
-              "${assets[@]}"
+            echo "creating the release $TAG"
+            resp=$(curl -sS -X POST "${auth[@]}" \
+                     -d "$(jq -n --arg t "$TAG" --arg n "BobShit $VER" --arg b "$body" \
+                           '{tag_name:$t, name:$n, body:$b, draft:false, prerelease:false}')" \
+                     "$api/releases")
+            id=$(echo "$resp" | jq -r '.id // empty')
+            if [ -z "$id" ] || [ "$id" = "null" ]; then
+              echo "::error::the release could not be created"
+              echo "$resp" | jq -r '.message // .'
+              exit 1
+            fi
           fi
+          upload=$(echo "$resp" | jq -r '.upload_url // empty' | sed 's/{.*//')
+          echo "release id: $id"
+          echo "upload url: $upload"
+          test -n "$upload"
+
+          for f in "${assets[@]}"; do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' -X POST \
+                    -H "Authorization: Bearer $GH_TOKEN" \
+                    -H "Content-Type: application/octet-stream" \
+                    --data-binary "@$f" "$upload?name=$f")
+            echo "  $f -> HTTP $code"
+            case "$code" in
+              200|201|204) ;;
+              *) echo "::error::upload of $f failed with HTTP $code"; exit 1 ;;
+            esac
+          done
 
           # verify through the public API, without the token: if the release is
           # not publicly visible the job has to fail, otherwise a silent
           # success would look like a published release
           ok=0
           for i in 1 2 3 4 5 6 7 8 9 10; do
-            if curl -sSf -o /dev/null "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/$TAG"; then
+            if curl -sSf -o /dev/null "$api/releases/tags/$TAG"; then
               ok=1
               echo "the release is publicly visible (attempt $i)"
               break
             fi
-            echo "not visible yet (attempt $i), waiting"
+            echo "not visible yet (attempt $i)"
             sleep 6
           done
           test "$ok" = 1
-          gh release view "$TAG" --json tagName,name,url,assets
+          curl -sS "$api/releases/tags/$TAG" \
+            | jq -r '"published: \(.html_url)  assets: \(.assets | length)"'
