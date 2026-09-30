@@ -453,30 +453,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: install rpm
+      - name: build the .rpm inside a fedora container
+        env:
+          VER: ${{ needs.verify.outputs.version }}
         run: |
           set -eux
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq rpm
-
-      - name: build the .rpm
-        run: |
-          set -eux
-          ver=$(sed -n 's/^#define BS_VERSION "\(.*\)"$/\1/p' lang/include/common.h)
-          top="$RUNNER_TEMP/rpmbuild"
-          mkdir -p "$top"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
-
-          make -C lang
+          # building on Fedora itself avoids the quirks of the rpm shipped by
+          # Debian/Ubuntu, and it is what a Fedora maintainer would do anyway
           mkdir -p dist
-          tar -czf "$top/SOURCES/bobshit-$ver.tar.gz" \
-              --transform "s,^,bobshit-$ver/," \
-              LICENSE README.md lang
-          make -C lang clean
-
-          cat > "$top/SPECS/bobshit.spec" <<EOF
+          docker run --rm \
+            -v "$PWD:/src" \
+            -e VER="$VER" \
+            fedora:latest \
+            bash -euxc '
+              dnf -y install rpm-build gcc make tar gzip >/dev/null
+              cd /src
+              tar -czf /tmp/bobshit-$VER.tar.gz \
+                  --transform "s,^,bobshit-$VER/," \
+                  LICENSE README.md lang
+              mkdir -p /tmp/rpmbuild/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
+              cat > /tmp/rpmbuild/SPECS/bobshit.spec <<SPEC
           %global debug_package %{nil}
           Name:           bobshit
-          Version:        $ver
+          Version:        $VER
           Release:        1%{?dist}
           Summary:        Soft, human-first interpreted language with bilingual FR/EN keywords
           License:        AGPL-3.0-only
@@ -504,15 +503,15 @@ jobs:
           %{_datadir}/doc/%{name}/LANGUAGE.md
           %{_datadir}/doc/%{name}/examples
           %changelog
-          * Mon Sep 30 2026 Riric65 <riric65@users.noreply.github.com> - $ver-1
+          * Mon Sep 30 2026 Riric65 <riric65@users.noreply.github.com> - $VER-1
           - Initial release
-          EOF
-
-          rpmbuild -bb --define "_topdir $top" --define "dist %{nil}" \
-              "$top/SPECS/bobshit.spec"
-          find "$top/RPMS" -name '*.rpm' -exec cp {} dist/ \;
-          rpm -qip dist/*.rpm > info.txt
-          head -10 info.txt
+          SPEC
+              rpmbuild -bb --define "_topdir /tmp/rpmbuild" --define "dist %{nil}" \
+                  /tmp/rpmbuild/SPECS/bobshit.spec
+              cp /tmp/rpmbuild/RPMS/*/*.rpm /src/dist/
+              rpm -qip /src/dist/*.rpm
+            '
+          ls -la dist
 
       - uses: actions/upload-artifact@v4
         with:
@@ -609,21 +608,25 @@ jobs:
           set -eux
           cd all
           sha256sum -c SHASUMS256.txt
-          assets=""
-          for f in bobshit-* SHASUMS256.txt; do assets="$assets \"$f\""; done
+          shopt -s nullglob
+          assets=()
+          for f in bobshit-*; do assets+=("$f"); done
+          assets+=(SHASUMS256.txt)
+          echo "assets to publish: ${#assets[@]}"
+          printf '  %s\n' "${assets[@]}"
           # idempotent: a re-run updates the existing release instead of
           # failing because the tag already has one
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "the release $TAG already exists, updating it"
-            eval gh release upload "$TAG" $assets --clobber
+            gh release upload "$TAG" "${assets[@]}" --clobber
             gh release edit "$TAG" \
               --title "BobShit ${{ needs.verify.outputs.version }}" \
               --notes-file "$RUNNER_TEMP/notes.md"
           else
-            eval gh release create "$TAG" \
+            gh release create "$TAG" \
               --title "BobShit ${{ needs.verify.outputs.version }}" \
               --notes-file "$RUNNER_TEMP/notes.md" \
-              $assets
+              "${assets[@]}"
           fi
           echo
           gh release view "$TAG" --json tagName,name,url
