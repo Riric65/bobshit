@@ -469,7 +469,7 @@ jobs:
               exec > >(tee /src/dist/rpmbuild.log) 2>&1
               dnf -y install rpm-build gcc make tar gzip >/dev/null
               cd /src
-              tar -czf /tmp/bobshit-$VER.tar.gz \
+              tar -czf /tmp/rpmbuild/SOURCES/bobshit-$VER.tar.gz \
                   --transform "s,^,bobshit-$VER/," \
                   LICENSE README.md lang
               mkdir -p /tmp/rpmbuild/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
@@ -612,7 +612,9 @@ jobs:
           # if the rpm build failed, park its log in an html comment: invisible
           # when rendered, readable through the API, so the failure is
           # diagnosable without opening the runner logs
-          if [ -f all/rpmbuild.log ]; then
+          shopt -s nullglob
+          rpms=(all/*.rpm)
+          if [ -f all/rpmbuild.log ] && [ "${#rpms[@]}" -eq 0 ]; then
             {
               echo
               echo '<!-- rpmbuild log (the Fedora package failed, this is why)'
@@ -646,21 +648,19 @@ jobs:
           # error instead of a green job with no release.
           api="https://api.github.com/repos/$GITHUB_REPOSITORY"
           auth=(-H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json")
-          body=$(jq -Rs . < "$RUNNER_TEMP/notes.md")
+          # --rawfile: the body is read as raw text in a single jq pass, so the
+          # markdown is not JSON encoded twice
+          payload=$(jq -n --arg t "$TAG" --arg n "BobShit $VER" \
+                    --rawfile b "$RUNNER_TEMP/notes.md" \
+                    '{tag_name:$t, name:$n, body:$b, draft:false, prerelease:false}')
 
           id=$(curl -sS "${auth[@]}" "$api/releases/tags/$TAG" | jq -r '.id // empty')
           if [ -n "$id" ] && [ "$id" != "null" ]; then
             echo "the release $TAG exists (id $id), updating it"
-            resp=$(curl -sS -X PATCH "${auth[@]}" \
-                     -d "$(jq -n --arg t "$TAG" --arg n "BobShit $VER" --arg b "$body" \
-                           '{tag_name:$t, name:$n, body:$b, draft:false, prerelease:false}')" \
-                     "$api/releases/$id")
+            resp=$(curl -sS -X PATCH "${auth[@]}" -d "$payload" "$api/releases/$id")
           else
             echo "creating the release $TAG"
-            resp=$(curl -sS -X POST "${auth[@]}" \
-                     -d "$(jq -n --arg t "$TAG" --arg n "BobShit $VER" --arg b "$body" \
-                           '{tag_name:$t, name:$n, body:$b, draft:false, prerelease:false}')" \
-                     "$api/releases")
+            resp=$(curl -sS -X POST "${auth[@]}" -d "$payload" "$api/releases")
             id=$(echo "$resp" | jq -r '.id // empty')
             if [ -z "$id" ] || [ "$id" = "null" ]; then
               echo "::error::the release could not be created"
