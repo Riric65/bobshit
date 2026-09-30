@@ -641,16 +641,31 @@ jobs:
           # idempotent: a re-run updates the existing release instead of
           # failing because the tag already has one
           if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "the release $TAG already exists, updating it"
+            echo "branch: the release $TAG already exists, updating it"
             gh release upload "$TAG" "${assets[@]}" --clobber
             gh release edit "$TAG" \
               --title "BobShit ${{ needs.verify.outputs.version }}" \
               --notes-file "$RUNNER_TEMP/notes.md"
           else
+            echo "branch: creating the release $TAG"
             gh release create "$TAG" \
               --title "BobShit ${{ needs.verify.outputs.version }}" \
               --notes-file "$RUNNER_TEMP/notes.md" \
               "${assets[@]}"
           fi
-          echo
-          gh release view "$TAG" --json tagName,name,url
+
+          # verify through the public API, without the token: if the release is
+          # not publicly visible the job has to fail, otherwise a silent
+          # success would look like a published release
+          ok=0
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            if curl -sSf -o /dev/null "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/$TAG"; then
+              ok=1
+              echo "the release is publicly visible (attempt $i)"
+              break
+            fi
+            echo "not visible yet (attempt $i), waiting"
+            sleep 6
+          done
+          test "$ok" = 1
+          gh release view "$TAG" --json tagName,name,url,assets
