@@ -25,7 +25,8 @@ permissions:
 
 concurrency:
   group: release-${{ github.ref }}
-  cancel-in-progress: false
+  # a newer tag supersedes a stuck run instead of waiting behind it
+  cancel-in-progress: true
 
 env:
   CFLAGS_REL: -std=c11 -O2 -Wall -Wextra
@@ -140,7 +141,12 @@ jobs:
           else
             make -C lang CC=${{ matrix.cc }} CFLAGS="$CFLAGS_REL"
           fi
-          ./lang/tests/run.sh
+          # a cross compiled binary cannot be executed on this runner
+          if [ "${{ matrix.cross }}" = cross ]; then
+            echo "cross build: the test suite cannot run here, skipping it"
+          else
+            ./lang/tests/run.sh
+          fi
           make -C lang clean
 
       - name: stage the archive
@@ -305,29 +311,17 @@ jobs:
           if-no-files-found: error
 
   macos:
-    name: macos ${{ matrix.target }}
+    name: macos arm64
     needs: verify
-    runs-on: ${{ matrix.os }}
-    # the Intel runners are scarce: never block the release on them
-    continue-on-error: ${{ matrix.optional }}
+    runs-on: macos-14
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-14
-            target: arm64
-            optional: false
-          - os: macos-13
-            target: x64
-            optional: true
     steps:
       - uses: actions/checkout@v4
 
       - name: build, test, stage
         env:
           VER: ${{ needs.verify.outputs.version }}
-          TARGET: ${{ matrix.target }}
+          TARGET: arm64
         run: |
           set -eux
           make -C lang
@@ -345,35 +339,66 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: rel-macos-${{ matrix.target }}
+          name: rel-macos-arm64
           path: dist/bobshit-*-macos-*.tar.gz
           if-no-files-found: error
 
+  # macOS x64 is deliberately NOT a dependency of the release: the Intel
+  # runners are scarce on GitHub and this job can sit queued for a very long
+  # time, which would delay every release.
+  macos-intel:
+    name: macos x64 (informatif)
+    needs: verify
+    runs-on: macos-13
+    continue-on-error: true
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: build, test, stage
+        env:
+          VER: ${{ needs.verify.outputs.version }}
+        run: |
+          set -eux
+          make -C lang
+          ./lang/tests/run.sh
+          make -C lang test
+          mkdir -p dist/stage/examples
+          install -m755 lang/bobshit dist/stage/bobshit
+          strip dist/stage/bobshit || true
+          install -m0644 LICENSE README.md dist/stage/
+          install -m0644 lang/docs/LANGUAGE.md dist/stage/
+          install -m0644 lang/examples/*.shit dist/stage/examples/
+          make -C lang clean
+          file dist/stage/bobshit
+          tar -czf "dist/bobshit-$VER-macos-x64.tar.gz" -C dist/stage .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rel-macos-x64
+          path: dist/bobshit-*-macos-x64.tar.gz
+          if-no-files-found: warn
+
   # ------------------------------------------------------------- packages
-  packages:
-    name: deb and rpm
+  deb:
+    name: debian / ubuntu package
     needs: verify
     runs-on: ubuntu-latest
-    # rpmbuild is not available everywhere: the packages are a bonus, the
-    # release must not depend on them
+    # rpmbuild and dpkg-deb are not available on every runner image: the
+    # packages are a bonus, the release must not depend on them
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
-      - name: install the packaging tools
+      - name: install dpkg-dev
         run: |
           set -eux
           sudo apt-get update -qq
-          sudo apt-get install -y -qq dpkg-dev rpm
+          sudo apt-get install -y -qq dpkg-dev
 
-      - name: build
+      - name: build the .deb
         run: |
           set -eux
           make -C lang
           ver=$(sed -n 's/^#define BS_VERSION "\(.*\)"$/\1/p' lang/include/common.h)
-          echo "version $ver"
-
-          # ---------------- .deb ----------------
           D="$RUNNER_TEMP/deb"
           install -d "$D/DEBIAN" "$D/usr/bin" "$D/usr/share/doc/bobshit/examples" \
                    "$D/usr/share/man/man1" "$D/usr/share/doc/bobshit"
@@ -410,12 +435,45 @@ jobs:
 
           mkdir -p dist
           dpkg-deb --root-owner-group --build "$D" "dist/bobshit_${ver}_amd64.deb"
-          dpkg-deb --info "dist/bobshit_${ver}_amd64.deb" | head -6
+          dpkg-deb --info "dist/bobshit_${ver}_amd64.deb" > info.txt
+          head -12 info.txt
+          dpkg-deb --contents "dist/bobshit_${ver}_amd64.deb" | head -5
 
-          # ---------------- rpm ----------------
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rel-deb
+          path: dist/*.deb
+          if-no-files-found: error
+
+  rpm:
+    name: fedora package
+    needs: verify
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install rpm
+        run: |
+          set -eux
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq rpm
+
+      - name: build the .rpm
+        run: |
+          set -eux
+          ver=$(sed -n 's/^#define BS_VERSION "\(.*\)"$/\1/p' lang/include/common.h)
           top="$RUNNER_TEMP/rpmbuild"
           mkdir -p "$top"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
-          cat > "$top/SOURCES/bobshit-$ver.tar.gz.spec" <<EOF
+
+          make -C lang
+          mkdir -p dist
+          tar -czf "$top/SOURCES/bobshit-$ver.tar.gz" \
+              --transform "s,^,bobshit-$ver/," \
+              LICENSE README.md lang
+          make -C lang clean
+
+          cat > "$top/SPECS/bobshit.spec" <<EOF
           %global debug_package %{nil}
           Name:           bobshit
           Version:        $ver
@@ -428,18 +486,16 @@ jobs:
           BuildRequires:  make
           Requires:       glibc
           %description
-          BobShit absorbs the chaos instead of complaining: parentheses, "then",
-          commas, closing "end" keywords and string quotes are optional. Every
+          BobShit absorbs the chaos instead of complaining: parentheses, then,
+          commas, closing end keywords and string quotes are optional. Every
           English keyword has a French alias and both styles can be mixed.
           %prep
-          %autosetup -n %{name}-%{version}
+          %setup -q -n %{name}-%{version}
           %build
           make -C lang
-          %check
-          cd lang && ./tests/run.sh
           %install
           make -C lang install DESTDIR=%{buildroot} PREFIX=%{_prefix}
-          %install -D -m644 LICENSE %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
+          install -D -m644 LICENSE %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
           %files
           %license %{_datadir}/licenses/%{name}/LICENSE
           %{_bindir}/%{name}
@@ -452,30 +508,22 @@ jobs:
           - Initial release
           EOF
 
-          # rpmbuild wants a plain Source0, so rebuild it from the tree
-          make -C lang clean
-          (cd lang && make)
-          (cd lang && make clean)
-          tar -czf "$top/SOURCES/bobshit-$ver.tar.gz" \
-              --transform "s,^,bobshit-$ver/," \
-              LICENSE README.md lang
           rpmbuild -bb --define "_topdir $top" --define "dist %{nil}" \
-              "$top/SOURCES/bobshit-$ver.tar.gz.spec"
+              "$top/SPECS/bobshit.spec"
           find "$top/RPMS" -name '*.rpm' -exec cp {} dist/ \;
-          rpm -qip dist/*.rpm | head -8
+          rpm -qip dist/*.rpm > info.txt
+          head -10 info.txt
 
       - uses: actions/upload-artifact@v4
         with:
-          name: rel-packages
-          path: |
-            dist/*.deb
-            dist/*.rpm
-          if-no-files-found: warn
+          name: rel-rpm
+          path: dist/*.rpm
+          if-no-files-found: error
 
   # ------------------------------------------------------------- publish
   release:
     name: publish
-    needs: [verify, source, linux, windows, macos, packages]
+    needs: [verify, source, linux, windows, macos, deb, rpm]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -499,7 +547,7 @@ jobs:
       - name: release notes
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+          TAG: v${{ needs.verify.outputs.version }}
           VER: ${{ needs.verify.outputs.version }}
         run: |
           set -eu
@@ -556,14 +604,26 @@ jobs:
       - name: publish
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+          TAG: v${{ needs.verify.outputs.version }}
         run: |
           set -eux
           cd all
           sha256sum -c SHASUMS256.txt
-          args=""
-          for f in bobshit-*; do args="$args $f"; done
-          gh release create "$TAG" \
-            --title "BobShit ${{ needs.verify.outputs.version }}" \
-            --notes-file "$RUNNER_TEMP/notes.md" \
-            $args SHASUMS256.txt
+          assets=""
+          for f in bobshit-* SHASUMS256.txt; do assets="$assets \"$f\""; done
+          # idempotent: a re-run updates the existing release instead of
+          # failing because the tag already has one
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "the release $TAG already exists, updating it"
+            eval gh release upload "$TAG" $assets --clobber
+            gh release edit "$TAG" \
+              --title "BobShit ${{ needs.verify.outputs.version }}" \
+              --notes-file "$RUNNER_TEMP/notes.md"
+          else
+            eval gh release create "$TAG" \
+              --title "BobShit ${{ needs.verify.outputs.version }}" \
+              --notes-file "$RUNNER_TEMP/notes.md" \
+              $assets
+          fi
+          echo
+          gh release view "$TAG" --json tagName,name,url

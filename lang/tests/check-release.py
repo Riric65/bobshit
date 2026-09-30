@@ -54,7 +54,7 @@ def steps():
 
 # steps that only install toolchains: they need root, so they cannot be
 # replayed locally and are reported as skipped
-APT_STEPS = ("install the toolchain", "install mingw-w64", "install the packaging tools")
+APT_STEPS = ("install the toolchain", "install mingw-w64", "install dpkg-dev", "install rpm")
 
 
 def main():
@@ -155,12 +155,18 @@ def main():
         elif job == "macos":
             print("  %sskip%s  %s (runner macOS)" % (YEL, OFF, tag))
 
-        elif job == "packages":
-            if not shutil.which("dpkg-deb"):
-                print("  %sskip%s  %s (dpkg-deb absent)" % (YEL, OFF, tag))
+        elif job == "macos-intel":
+            print("  %sskip%s  %s (runner macOS Intel, hors du chemin critique)" % (YEL, OFF, tag))
+
+        elif job in ("deb", "rpm"):
+            tool = "dpkg-deb" if job == "deb" else "rpmbuild"
+            ext = ".deb" if job == "deb" else ".rpm"
+            if not shutil.which(tool):
+                print("  %sskip%s  %s (%s absent)" % (YEL, OFF, tag, tool))
             else:
                 p = run(script)
-                report(tag, p.returncode == 0, p.stderr[-500:])
+                got = [f for f in listing() if f.endswith(ext)]
+                report(tag, p.returncode == 0 and bool(got), p.stderr[-500:])
 
         elif job == "release":
             print("  %sskip%s  %s (publie sur GitHub)" % (YEL, OFF, tag))
