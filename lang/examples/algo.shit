@@ -1,0 +1,122 @@
+# algo.shit — quelques algorithmes classiques, sans bibliothèque
+# Rappel: les listes sont indexées à partir de 0.
+
+# --- fibonacci itératif (rapide) et récursif (lisible)
+fun fib_iter n
+  a = 0
+  b = 1
+  for i in 1 to n
+    tmp = a + b
+    a = b
+    b = tmp
+  end
+  return a
+end
+
+fun fib n
+  if n < 2 then return n end
+  return fib(n - 1) + fib(n - 2)
+end
+
+say "fib(30) itératif =", fib_iter(30)
+say "fib(15) récursif =", fib(15)
+
+# --- factorielle et gcd
+fun factorielle n
+  if n <= 1 then return 1 end
+  return n * factorielle(n - 1)
+end
+
+fun pgcd a b
+  tant = b
+  while tant != 0
+    reste = a % tant
+    a = tant
+    tant = reste
+  end
+  return a
+end
+
+say "factorielle(10) =", factorielle(10)
+say "pgcd(48, 18) =", pgcd(48, 18)
+
+# --- crible d'Ératosthène
+limite = 50
+sieve = []
+for i in 0 to limite
+  push(sieve, true)
+end
+sieve[0] = false
+sieve[1] = false
+for i in 2 to limite
+  if sieve[i]
+    for j in i * i to limite step i
+      sieve[j] = false
+    end
+  end
+end
+premiers = []
+for i in 2 to limite
+  if sieve[i] then push(premiers, i) end
+end
+say "premiers <= 50:", premiers
+
+# --- tri à bulles
+fun tri_bulle xs
+  n = len(xs)
+  for i in 0 to n - 2
+    for j in 0 to n - 2 - i
+      if xs[j] > xs[j + 1]
+        tmp = xs[j]
+        xs[j] = xs[j + 1]
+        xs[j + 1] = tmp
+      end
+    end
+  end
+  return xs
+end
+say "bulle:", tri_bulle([5, 2, 9, 1, 5, 6, -3])
+
+# --- recherche dichotomique
+fun recherche xs cible
+  bas = 0
+  haut = len(xs) - 1
+  while bas <= haut
+    milieu = floor((bas + haut) / 2)
+    if xs[milieu] == cible then return milieu end
+    if xs[milieu] < cible
+      bas = milieu + 1
+    else
+      haut = milieu - 1
+    end
+  end
+  return -1
+end
+triee = tri_bulle([5, 2, 9, 1, 5, 6])
+say "recherche(9) =", recherche(triee, 9)
+say "recherche(4) =", recherche(triee, 4)
+
+# --- comptage de mots
+texte = "le chat dort sur le tapis et le chien dort sur le chat"
+mots = split(texte, " ")
+compte = {}
+for m in mots
+  n = 0
+  if has(compte, m) then n = compte[m] end
+  compte[m] = n + 1
+end
+for m in ["chat", "dort", "le"]
+  say m, "->", compte[m]
+end
+say "mots distincts:", len(compte)
+
+# --- closure: un compteur qui garde son état
+fun compteur depart
+  valeur = depart
+  fun()
+    valeur = valeur + 1
+    return valeur
+  end
+end
+c = compteur(10)
+say c(), c(), c()

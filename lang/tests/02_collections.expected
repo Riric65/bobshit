@@ -1,0 +1,22 @@
+[1, 2, 3] 3 1 2 3 3 1
+[99, 2, 3, 4]
+5 [99, 2, 3, 4]
+[99, 2, 3, 4, 9] [99, 2, 3, 4, 9]
+list list
+2 2
+3
+Xem 42 a Lyon
+[name, score, tags, meta]
+[Xem, 42, [a, b], {city: Lyon}]
+true false true
+nil
+3 {name: Xem, score: 42, tags: [a, b], meta: {city: Lyon}, level: 3}
+13
+true false
+{a: 1, b: 2}
+ada is 36
+bob is 24
+0 ada
+1 bob
+[] {} 0 0
+[]

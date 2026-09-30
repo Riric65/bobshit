@@ -1,0 +1,43 @@
+# collections: lists, maps, indexing, assignment
+xs = [1, 2, 3]
+say xs, len(xs), xs[0], xs[1], xs[2], xs[-1], xs[-3]
+xs[0] = 99
+xs[3] = 4        # soft: grows the list
+say xs
+push(xs, 5)
+say pop(xs), xs
+say xs + [9], xs + 9
+say type([1] + [2]), type([1] + 2)
+
+# nested
+m = [[1, 2], [3, 4]]
+say m[0][1], len(m)
+say [1, [2, [3]]][1][1][0]
+
+# maps
+user = {name: "Xem", score: 42, tags: ["a", "b"], meta: {city: "Lyon"}}
+say user.name, user["score"], user.tags[0], user.meta.city
+say keys(user)
+say values(user)
+say has(user, "name"), has(user, "nope"), has([1, "b"], "b")
+say user.level
+user.level = 3
+say user.level, user
+user.level += 10
+say user.level
+say del(user, "level"), has(user, "level")
+say {a: 1} + {b: 2}
+
+# lists of maps
+people = [{name: "ada", age: 36}, {name: "bob", age: 24}]
+for p in people
+  say p.name, "is", p.age
+end
+for i, p in people
+  say i, p.name
+end
+
+# empty
+say [], {}, len([]), len({})
+push([], 1)
+say []

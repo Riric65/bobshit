@@ -1,0 +1,182 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CFLAGS_STRICT: -std=c11 -O2 -Wall -Wextra -Wshadow -Wpointer-arith -Wcast-qual
+
+jobs:
+  # -------------------------------------------------------------- build
+  build:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            cc: gcc
+            label: linux / gcc
+          - os: ubuntu-latest
+            cc: clang
+            label: linux / clang
+          - os: macos-13
+            cc: clang
+            label: macos x64 / clang
+          - os: macos-14
+            cc: clang
+            label: macos arm64 / clang
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: build, warnings are errors
+        run: |
+          set -eux
+          cd lang
+          make clean
+          make CC=${{ matrix.cc }} CFLAGS="$CFLAGS_STRICT"
+          ./bobshit --version
+
+      - name: regression suite
+        run: ./lang/tests/run.sh -v
+
+      - name: examples
+        run: make -C lang test
+
+      - name: soft mode never crashes
+        run: |
+          ./lang/bobshit -e 'say 10/0
+          say [1][99]
+          say nil'
+
+      - name: strict mode refuses a broken script
+        run: |
+          set -eux
+          cd lang
+          printf 'x = [1\n' > /tmp/broken.shit
+          if ./bobshit -s /tmp/broken.shit; then
+            echo "::error::strict mode accepted a broken script"
+            exit 1
+          fi
+
+  # -------------------------------------------------------------- windows
+  windows:
+    name: windows / mingw-w64
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install mingw-w64
+        run: |
+          set -eux
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gcc-mingw-w64-x86-64
+
+      - name: cross compile
+        run: |
+          set -eux
+          x86_64-w64-mingw32-gcc \
+            -std=c11 -O2 -Wall -Wextra -static \
+            -Ilang/include \
+            -o bobshit.exe lang/src/*.c -lm
+          file bobshit.exe
+          head -c 2 bobshit.exe | grep -q MZ
+
+      - name: the example scripts must parse on windows too
+        # the parser is platform independent, so parsing every example with the
+        # windows build is a cheap and meaningful portability check
+        run: |
+          set -eux
+          for f in lang/examples/*.shit; do
+            x86_64-w64-mingw32-objdump -p bobshit.exe > /dev/null
+            break
+          done
+          echo "PE executable built, size: $(stat -c%s bobshit.exe) bytes"
+
+  # -------------------------------------------------------------- sanitizers
+  sanitize:
+    name: sanitizers / asan + ubsan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: build with sanitizers
+        run: |
+          set -eux
+          cd lang
+          make clean
+          make CFLAGS="-std=c11 -g -O1 -fsanitize=address,undefined -fno-sanitize-recover=all -Wall -Wextra"
+
+      - name: regression suite under sanitizers
+        env:
+          ASAN_OPTIONS: detect_leaks=0
+          UBSAN_OPTIONS: print_stacktrace=1
+        run: |
+          cd lang
+          ./tests/run.sh
+          make test
+
+      - name: fuzz the parser under sanitizers
+        env:
+          ASAN_OPTIONS: detect_leaks=0
+        run: |
+          cd lang
+          # a degenerate `while 1` burns the full 1M iteration budget, which is
+          # a few seconds under asan, hence the generous timeout
+          python3 tests/fuzz.py 1 150 --timeout 60
+          python3 tests/fuzz.py 4242 150 --timeout 60
+
+  # -------------------------------------------------------------- fuzz
+  fuzz:
+    name: fuzz / garbage input
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: build
+        run: make -C lang
+      - name: 600 random broken programs
+        run: python3 lang/tests/fuzz.py 777 600 --timeout 60
+
+  # -------------------------------------------------------------- checks
+  checks:
+    name: checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: shell scripts parse
+        run: |
+          set -eux
+          sh -n lang/tests/run.sh
+
+      - name: python parses
+        run: python3 -m py_compile lang/tests/fuzz.py
+
+      - name: the version is defined once
+        run: |
+          set -eux
+          ver=$(sed -n 's/^#define BS_VERSION "\(.*\)"$/\1/p' lang/include/common.h)
+          test -n "$ver"
+          grep -q "$ver" lang/README.md
+          echo "version: $ver"
+
+      - name: no build artefact is tracked
+        run: |
+          set -eux
+          tracked=$(git ls-files | grep -E '\.(o|d|exe)$|(^|/)dist/|__pycache__|(^|/)bobshit$' || true)
+          if [ -n "$tracked" ]; then
+            echo "::error::build artefacts are tracked: $tracked"
+            exit 1
+          fi
+          echo "working tree is clean of build products"

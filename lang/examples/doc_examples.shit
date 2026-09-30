@@ -1,0 +1,182 @@
+# Les exemples de la doc, un par un.
+
+say "salut, c'est BobShit"
+name = "Bob"
+say "moi c'est", name
+
+# ça passe en soft
+x=1+ 2
+say "x =" x
+if x>2
+  say "ok"
+end
+
+# types
+say type(42)        # num
+say type("yo")      # str
+say type([1,2])     # list
+say type({a:1})     # map
+say type(nil)       # nil
+
+# variables
+x = 10
+x = x + 1
+name := "bob"   # := aussi accepté
+compteur = 0
+
+# operators
+say "bob" + "shit"     # bobshit
+say [1,2] + [3]        # [1,2,3]
+say 10 / 0             # 0 (soft)
+say true and false     # false
+say 1 or 0             # 1
+
+# strings
+s = "ligne1\nligne2"
+say s[0]          # index caractère
+say len(s)
+say upper(s)
+say lower("BOB")
+say split("a,b,c", ",")
+say join(["a","b"], "-")
+
+# lists & maps
+xs = [10, 20, 30]
+say xs[0]
+xs[1] = 99
+push(xs, 40)
+say pop(xs)
+
+user = {name: "Xem", score: 42}
+say user.name
+say user["score"]
+user.level = 3
+say keys(user)
+say has(user, "name")
+
+# negative index, python style
+say xs[-1]
+
+# if / elif / else
+n = 7
+if n > 10 then
+  say "grand"
+elif n > 5
+  say "moyen"
+else
+  say "petit"
+end
+
+# FR
+si n == 0 alors
+  say "zéro"
+fin
+
+si n == 7 alors
+  say "sept"
+fin
+
+# while
+i = 0
+while i < 3
+  say i
+  i = i + 1
+end
+
+# range for
+for i in 1 to 5
+  say i
+end
+
+for i in 0 to 10 step 2
+  say i
+end
+
+# foreach
+for x in [1, 2, 3]
+  say x * x
+end
+
+for c in "bob"
+  say c
+end
+
+# break / continue
+for i in 1 to 100
+  if i == 5 then break end
+  if i % 2 == 0 then continue end
+  say i
+end
+
+# try / catch
+try
+  boom = 5
+  say boom()
+catch err
+  say "caught:", err
+end
+
+# functions
+fun add(a, b)
+  return a + b
+end
+
+say add(2, 3)
+result = add(10, 5)
+return          # renvoie nil
+
+# parenthèses optionnelles sur les params
+fun add2 a b
+  return a + b
+end
+say add2(20, 22)
+
+# alias: fn / def / fonction / func
+fonction greet name
+  say "yo", name
+fin
+greet("bob")
+
+fn mul a b
+  return a * b
+end
+say mul(3, 4)
+
+# recursion
+fun factorial n
+  if n <= 1 then return 1 end
+  return n * factorial(n - 1)
+end
+say factorial(6)
+
+# io
+say "hello", 1, true
+print "alias de say"
+affiche "FR alias"
+
+# FizzBuzz
+for i in 1 to 20
+  if i % 15 == 0 then say "FizzBuzz"
+  elif i % 3 == 0 then say "Fizz"
+  elif i % 5 == 0 then say "Buzz"
+  else say i
+  end
+end
+
+# map / filter style
+fun filter_even xs
+  out = []
+  for x in xs
+    if x % 2 == 0 then push(out, x) end
+  end
+  return out
+end
+say filter_even(range(1, 10))
+
+# config map
+cfg = {
+  host: "bob.xem.yt",
+  port: 443,
+  soft: true
+}
+if cfg.soft then say "running soft on", cfg.host end

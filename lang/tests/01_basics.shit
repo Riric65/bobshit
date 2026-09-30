@@ -1,0 +1,45 @@
+# basics: literals, types, truthiness
+say 42
+say 3.14
+say -7
+say true
+say false
+say nil
+say "hello"
+say 'single quotes'
+say type(42), type("a"), type(true), type(nil), type([1]), type({a: 1})
+say type(len), type(fun(x) x end)
+
+# truthiness
+say !nil, !false, !0, !"", ![]
+say !1, !"x", !{}
+
+# numbers
+say 0x1f
+say 0b1011
+say 0o17
+say 1_000_000
+say 1e3
+say .5
+say 2 + 3 * 4
+say (2 + 3) * 4
+say 7 % 3
+say -7 % 3
+say 10 / 4
+say 2 * 3.5
+
+# strings
+say "bob" + "shit"
+say "n=" + 5
+say 5 + "!"
+say "tab:\t|newline:\n|backslash:\\|quote:\""
+say len("héllo")
+say "héllo"[1]
+say "héllo"[-1]
+say upper("MiXeD"), lower("MiXeD"), trim("  pad  ")
+say split("a,b,,c", ",")
+say split("abc", "")
+say join(["a", 1, true], "|")
+say replace("a-b-c", "-", "+")
+say starts("bobshit", "bob"), ends("bobshit", "shit")
+say index("bobshit", "sh"), index(["a","b"], "b"), index([1,2], 9)

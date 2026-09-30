@@ -1,0 +1,42 @@
+# config.shit — configuration en map, style JSON sans guillemets sur les clés
+cfg = {
+  host: "bob.xem.yt",
+  port: 443,
+  soft: true,
+  retries: 3,
+  tags: ["langage", "script", "fun"],
+  limits: {rps: 10, burst: 30}
+}
+
+say "--- config brute"
+say cfg
+
+say "--- lecture"
+say cfg.host, cfg["port"], cfg.limits.burst
+say "clé absente:", cfg.nope
+
+if cfg.soft then say "running soft on", cfg.host end
+
+say "--- parcours"
+for k, v in cfg
+  say k, " = ", v
+end
+
+say "--- modification"
+cfg.port = 8080
+cfg.limits.rps = cfg.limits.rps * 2
+cfg.extra = "nouveau"
+say cfg.port, cfg.limits.rps, cfg.extra
+
+say "--- validation"
+fun check c
+  problems = []
+  if not has(c, "host") then push(problems, "host manquant") end
+  if c.port < 1 or c.port > 65535 then push(problems, "port invalide") end
+  if len(problems) == 0 then return "ok"
+  return join(problems, " / ")
+end
+
+say check(cfg)
+say check({port: 99999})
+say check({})

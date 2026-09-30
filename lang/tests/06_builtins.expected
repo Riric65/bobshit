@@ -1,0 +1,48 @@
+--- introspection
+num str nil bool list map
+42 txt [1, a] nil true
+42 3.5 1 0 2
+3 -3 12
+false false false true true
+--- length
+5 2 2 5 0
+--- lists
+[3, 1, 2, 4]
+[3, 1, 2, 4]
+4 [3, 1, 2]
+[1, 9, 2, 3]
+1
+[3, 2, 1]
+[1, 2, 3] [a, b]
+2
+10
+2 -1
+[1, 2]
+--- maps
+[b, a] [2, 1] 2
+true false
+true [b]
+--- ranges
+[1, 2, 3, 4, 5]
+[1, 4, 7, 10]
+[5, 4, 3, 2, 1]
+100
+--- math
+3 3.5
+3 4 3 3.46
+4 1024
+1 3
+[4, 9, 2] 2
+1
+--- strings
+ABC abc x
+[a, b, , c]
+x--y
+bbb
+true true
+3
+quote:"inside"
+--- fun builtins on the edge
+5
+1+2+3
+[a, b, c]

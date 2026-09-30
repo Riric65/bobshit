@@ -1,0 +1,24 @@
+# build artifacts
+lang/bobshit
+*.o
+*.d
+*.out
+*.exe
+__pycache__/
+*.pyc
+
+# packaging trees, if someone builds one locally
+/dist/
+/debian/
+/pkg/
+/rpms/
+/rpmbuild/
+*.deb
+*.rpm
+*.pkg.tar.zst
+
+# editors
+.vscode/
+.idea/
+*.swp
+*~

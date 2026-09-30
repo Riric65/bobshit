@@ -1,0 +1,60 @@
+# soft.shit — ce que le mode soft pardonne
+# Rien ici n'est censé planter: c'est le point.
+
+# 1. pas de end
+if true
+  say "1. un bloc sans end se termine tout seul"
+
+# 2. parenthèses et guillemets absents
+say "2. guillemet non fermé
+xs = [1, 2
+say xs
+
+# 3. pas de virgules
+say "3.", 1 2 3
+say [10 20 30]
+say {a: 1 b: 2}
+
+# 4. opérateur en fin de ligne
+total = 1 +
+        2 +
+        3
+say "4. total =", total
+
+# 5. une ligne qui commence par un moins est une nouvelle instruction
+x = 100
+- 5
+say "5. x =", x
+
+# 6. parenthèses inutiles autour des conditions
+if (1 + 1) == 2 then say "6. parenthèses en trop, ça passe" end
+
+# 7..then / do facultatifs
+if 1 < 2 say "7. then optionnel" end
+while false then say "jamais" end
+
+# 8. virgule finale
+say "8. virgule finale",
+
+# 9. division par zéro -> 0
+say "9.", 10 / 0, 10 % 0
+
+# 10. identifiant inconnu -> nil
+say "10.", variable_qui_nexiste_pas
+
+# 11. appel d'un non fonction -> nil
+say "11.", 42()
+say "11.", nil()
+
+# 12. index hors bornes -> nil
+say "12.", [1, 2][99]
+say "12.", "abc"[99]
+
+# 13. caractères parasites ignorés
+say "13. jUNK ? ` ~ ^ ok"
+
+# 14. point-virgule = séparateur
+say "14."; say "ok";
+
+# 15. le programme est toujours vivant
+say "15. toujours vivant"

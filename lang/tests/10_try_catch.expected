@@ -1,0 +1,8 @@
+1. line 5: cannot assign into a num value
+2. line 12: range step cannot be 0
+3. stack: str
+4. silence
+4. done
+bobshit: warning: line 37: unknown variable 'boom', treated as nil
+bobshit: warning: line 37: 'nil' is a nil, not a function, call ignored
+bobshit: 2 warning(s), run with -s to turn them into errors

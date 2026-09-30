@@ -1,0 +1,105 @@
+.TH BOBSHIT 1 "2026" "BobShit 0.1.0" "User Commands"
+.SH NAME
+bobshit \- run a BobShit program
+.SH SYNOPSIS
+.B bobshit
+.RI [ options ]
+.IR file.shit
+.br
+.B bobshit run
+.I file.shit
+.br
+.B bobshit \-e
+.I code
+.br
+.B bobshit \-i
+.SH DESCRIPTION
+.B bobshit
+is the reference interpreter of BobShit, a soft, human-first interpreted
+language. It runs a
+.I .shit
+source file, a snippet of code, or an interactive session.
+.PP
+By default BobShit runs in
+.B soft
+mode: missing parentheses, missing
+.BR end ,
+missing commas, unterminated strings and stray characters are absorbed with
+a warning instead of aborting. Pass
+.B \-s
+to turn those warnings into hard errors.
+.SH OPTIONS
+.TP
+.BI "run " file.shit
+Explicit spelling of the default action.
+.TP
+.BI "\-e " code " | " \-\-eval " code
+Evaluate
+.I code
+instead of a file.
+.TP
+.BR \-i ", " \-\-interactive
+Start the REPL. Multi-line blocks and multi-line lists are read until they are
+balanced.
+.TP
+.BR \-s ", " \-\-strict
+Disable soft mode. The first diagnostic aborts the program with exit code 1.
+.TP
+.B \-\-soft
+Force soft mode (the default).
+.TP
+.B \-\-hold
+Wait for Enter before exiting. Used by the Windows file association so that
+double clicking a
+.I .shit
+file does not close the console before the output can be read.
+.TP
+.B \-\-ast
+Print the AST of the input and exit.
+.TP
+.B \-\-tokens
+Print the token stream of the input and exit.
+.TP
+.BR \-v ", " \-\-version
+Print the version and exit.
+.TP
+.BR \-h ", " \-\-help
+Print a usage summary and exit.
+.SH EXAMPLES
+.TP
+.B bobshit hello.shit
+Run a script.
+.TP
+.B bobshit \-e 'say "hi", 1+1'
+Run a one liner.
+.TP
+.B echo 'say "salut"' > x.shit && chmod +x x.shit && ./x.shit
+Run a script through its shebang, with
+.B #!/usr/bin/env bobshit
+as its first line.
+.SH EXIT STATUS
+.TP
+.B 0
+The program ran to completion.
+.TP
+.B 1
+A runtime error was not caught, the first strict-mode diagnostic was hit, or
+the file could not be read.
+.SH FILES
+.TP
+.I /usr/share/doc/bobshit/LANGUAGE.md
+The full language reference: lexique, types, collections, control flow,
+functions, builtins, grammar and recipes.
+.TP
+.I /usr/share/doc/bobshit/examples/
+Runnable examples, also served as executable documentation.
+.SH ENVIRONMENT
+Soft mode emits warnings on standard error and the CLI prints a one line
+summary of the warning count at the end of the run.
+.SH SEE ALSO
+The full language reference ships in
+.IR /usr/share/doc/bobshit/LANGUAGE.md .
+.SH BUGS
+No garbage collector: memory used by values is not reclaimed before the
+process exits. The call stack is capped at 256 frames and each loop statement
+at 1,000,000 iterations.

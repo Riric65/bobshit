@@ -1,0 +1,97 @@
+# functions: params, defaults (nil), varargs dropped, recursion, closures
+fun add(a, b)
+  return a + b
+end
+say add(2, 3)
+
+fun add2 a b
+  return a + b
+end
+say add2(2, 3)
+
+fn mul a b
+  return a * b
+end
+say mul(2, 3)
+
+def sub(a, b)
+  return a - b
+end
+say sub(10, 4)
+
+fonction greet name
+  say "yo", name
+fin
+greet("bob")
+
+func shout(txt)
+  return upper(txt) + "!"
+end
+say shout("hi")
+
+# missing args are nil, extra args are dropped
+say add(5)
+say add(1, 2, 3, 4)
+say len(), type()
+
+# no return -> nil
+fun nothing
+  x = 1
+end
+say nothing()
+
+# recursion
+fun factorial n
+  if n <= 1 then return 1 end
+  return n * factorial(n - 1)
+end
+say factorial(1), factorial(6)
+
+fun fib n
+  if n < 2 then return n end
+  return fib(n - 1) + fib(n - 2)
+end
+say fib(10)
+
+# mutual recursion
+fun is_even n
+  if n == 0 then return true end
+  return is_odd(n - 1)
+end
+fun is_odd n
+  if n == 0 then return false end
+  return is_even(n - 1)
+end
+say is_even(10), is_odd(7)
+
+# closures
+fun adder n
+  fun(x)
+    return x + n
+  end
+end
+add5 = adder(5)
+add10 = adder(10)
+say add5(1), add10(1)
+
+fun counter()
+  c = 0
+  fun()
+    c = c + 1
+    return c
+  end
+end
+c = counter()
+say c(), c(), c()
+
+# higher order: sort with a comparator
+say sort([3, 1, 2])
+say sort(["pear", "fig", "banana"])
+say sort([1, -2, 3], fun(a, b) b - a end)
+
+# functions are values
+say type(add), type(len)
+fn apply(f, x)
+  return f(x)
+end
+say apply(fun(x) x * 3 end, 5)

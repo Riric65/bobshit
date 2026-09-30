@@ -1,0 +1,68 @@
+# soft mode: the interpreter should survive every one of these
+# 1. missing end on a block
+if true
+  say "1. block sans end"
+
+// 2. unbalanced brackets and quotes
+say "2. guillemets non fermés: encore vivant
+xs = [1, 2
+say xs
+cfg = {a: 1
+say cfg.a
+
+// 3. missing parens everywhere
+if 1 + 1 == 2 say "3. condition sans parenthèses" end
+say str(42)
+
+// 4. missing commas
+say "4.", 1 2 3
+say [1 2 3]
+say {a: 1 b: 2}
+
+// 5. trailing operators keep going on the next line
+x = 1 +
+    2 +
+    3
+say "5. continuations:", x
+say [1,
+     2,
+     3]
+
+// 6. a fresh line starting with a minus is a new statement
+y = 10
+- 5
+say "6. y =", y
+
+// 7. unknown identifier is nil
+say "7.", nope
+
+// 8. junk characters
+say "8. junk ? ` ~ ^ skipped"
+say 1 ? 2
+
+// 9. division by zero
+say "9.", 10 / 0, 10 % 0
+
+// 10. bad call
+say "10.", 42()
+callable = "nope"
+say callable()
+
+// 11. indexing out of range and on nil
+say [1][9]
+say "ab"[9]
+say nil[0]
+say {a: 1}.b
+say {a: 1}[0]
+
+// 12. semicolons work as separators
+say "12."; say "ok";
+
+// 13. deep chain of maps and lists
+say [[["deep"]]][0][0][0]
+
+// 14. empty statements and stray closers
+}
+]
+)
+say "14. survivant"

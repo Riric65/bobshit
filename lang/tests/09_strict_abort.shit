@@ -1,0 +1,7 @@
+# runtime errors: hard failures that exit(1) with a message
+# (run with -s by the test runner for this file)
+fun deep n
+  return deep(n + 1)
+end
+say "about to blow the stack"
+say deep(1)

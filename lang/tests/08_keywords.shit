@@ -1,0 +1,108 @@
+# FR / EN keyword aliases, they must all behave the same
+# functions
+fun f1 a          say "fun" a end
+fn f2 a           say "fn" a end
+def f3 a          say "def" a end
+fonction f4 a     say "fonction" a fin
+func f5 a         say "func" a end
+f1(1) f2(2) f3(3) f4(4) f5(5)
+
+# if / then / end
+x = 2
+if x == 1 then say "if" end
+si x == 1 alors say "si" fin
+si x == 2 alors say "si ok" fin
+
+# else / sinon / elif / sinon_si
+si x == 1 alors
+  say "un"
+sinon_si x == 2 alors
+  say "deux"
+sinon
+  say "autre"
+fin
+
+if x == 1 then say "un"
+elif x == 2 then say "deux"
+else say "autre"
+end
+
+if x == 1 then say "un"
+elsif x == 2 then say "deux"
+end
+
+# while
+i = 0
+while i < 2
+  say "while", i
+  i = i + 1
+end
+
+i = 0
+tantque i < 2
+  say "tantque", i
+  i = i + 1
+fin
+
+# for / in / to / step
+for i in 1 to 2
+  say "for", i
+end
+pour i dans 1 jusqua 2
+  affiche "pour", i
+fin
+pour i dans 1 jusqua 5 pas 2
+  affiche "pas", i
+fin
+
+# break / continue
+for i in 1 to 5
+  if i == 2 then continue end
+  if i == 4 then break end
+  say "i", i
+end
+for i in 1 to 5
+  if i == 3 then casse end
+  say "j", i
+end
+
+# return
+fun r1
+  return 1
+  retour 2
+end
+fun r2
+  return 1
+  renvoie 2
+end
+say r1(), r2()
+
+# try / catch
+essaie
+  z = 5
+  z[0] = 1
+attrape e
+  affiche "attrape", type(e)
+fin
+
+# say aliases
+say "say"
+print "print"
+echo "echo"
+affiche "affiche"
+log "log"
+
+# logical operators
+say true and false, true or false, not true, !false
+say vrai et faux, faux ou vrai, non vrai
+
+# literals
+say true, vrai, false, faux, nil, null, none, rien
+say [1,2] == [1,2], {a:1} == {a:1}, "a" == "a", 1 != 2
+
+# case insensitivity
+SAY "MAJUSCULES OK"
+Say "MiXeD"
+if TRUE then say "IF majuscule" end
+Fun maj a Return a fin
+say maj(1)

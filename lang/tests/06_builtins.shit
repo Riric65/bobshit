@@ -1,0 +1,60 @@
+# builtins reference, every native that ships with v0.1
+say "--- introspection"
+say type(1), type("s"), type(nil), type(true), type([1]), type({a: 1})
+say str(42), str("txt"), str([1, "a"]), str(nil), str(true)
+say num("42"), num("3.5xyz"), num(true), num(nil), num([1, 2])
+say int(3.9), int(-3.9), int("12abc")
+say bool(0), bool(""), bool([]), bool("x"), bool(1)
+
+say "--- length"
+say len("héllo"), len([1, 2]), len({a: 1, b: 2}), len(12345), len(nil)
+
+say "--- lists"
+l = [3, 1, 2]
+say push(l, 4)
+say l
+say pop(l), l
+say insert([1, 2, 3], 1, 9)
+say remove([1, 2, 3], 0)
+say reverse([1, 2, 3])
+say sort([3, 1, 2]), sort(["b", "a"])
+say count([1, 1, 2], 1)
+say sum([1, 2, 3, 4])
+say index([1, 2, 3], 3), index([1, 2, 3], 9)
+l = [1, 2, 3]
+pop(l)
+say l
+
+say "--- maps"
+m = {b: 2, a: 1}
+say keys(m), values(m), len(m)
+say has(m, "a"), has(m, "z")
+say del(m, "a"), keys(m)
+
+say "--- ranges"
+say range(1, 5)
+say range(1, 10, 3)
+say range(5, 1, -1)
+say len(range(0, 99))
+
+say "--- math"
+say abs(-3), abs(3.5)
+say floor(3.7), ceil(3.2), round(3.456), round(3.456, 2)
+say sqrt(16), pow(2, 10)
+say min(3, 1, 2), max(3, 1, 2)
+say min([4, 9, 2]), max(1.5, 2)
+say sum([0.5, 0.5])
+
+say "--- strings"
+say upper("abc"), lower("ABC"), trim("  x  ")
+say split("a b  c", " ")
+say join(["x", "y"], "--")
+say replace("aaa", "a", "b")
+say starts("bobshit", "bob"), ends("bobshit", "shit")
+say index("bobshit", "sh")
+say str("quote:\"inside\"")
+
+say "--- fun builtins on the edge"
+say len(str(12345))
+say join(split("1,2,3", ","), "+")
+say sort(keys({c: 3, a: 1, b: 2}))

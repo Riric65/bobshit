@@ -1,0 +1,40 @@
+# try / catch: the soft places where a real error is raised
+# 1. assigning into something that is not a container
+try
+  n = 5
+  n[0] = 1
+catch e
+  say "1.", e
+end
+
+# 2. a range step of zero
+try
+  for i in 1 to 10 step 0
+    say i
+  end
+catch e
+  say "2.", e
+end
+
+# 3. stack overflow is catchable
+fun deep n
+  return deep(n + 1)
+end
+try
+  deep(1)
+catch e
+  say "3. stack:", type(e)
+end
+
+# 4. try without catch, nothing to report
+try
+  say "4. silence"
+end
+say "4. done"
+
+# 5. the error variable is a normal string
+try
+  boom()
+catch err
+  say "5.", type(err), "->", err
+end

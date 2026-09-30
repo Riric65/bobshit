@@ -1,0 +1,2 @@
+about to blow the stack
+runtime error: line 4: stack overflow: more than 256 nested calls

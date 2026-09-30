@@ -1,0 +1,71 @@
+# fr.shit — le même programme, en keywords français
+# BobShit ne distingue pas le français de l'anglais: les deux marchent,
+# parfois dans la même phrase.
+
+# --- fonctions
+fonction saluer nom
+  affiche "bonjour", nom
+fin
+
+saluer("xem")
+
+# --- conditionnel
+n = 7
+si n > 10 alors
+  affiche "grand"
+sinon_si n > 5 alors
+  affiche "moyen"
+sinon
+  affiche "petit"
+fin
+
+# --- boucles
+i = 0
+tantque i < 3
+  affiche "i =", i
+  i = i + 1
+fin
+
+pour i dans 1 jusqua 5
+  affiche i
+fin
+
+pour i dans 0 jusqua 10 pas 2
+  affiche i
+fin
+
+pour lettre dans "bob"
+  affiche lettre
+fin
+
+# --- rupture de boucle
+pour i dans 1 jusqua 10
+  si i % 2 == 0 alors suivant fin
+  si i > 7 alors casse fin
+  affiche i
+fin
+
+# --- logique et valeurs
+affiche vrai et faux
+affiche faux ou vrai
+affiche non faux
+affiche vrai, faux, nil, rien
+
+# --- retour
+fun double x
+  retour x * 2
+fin
+affiche double(21)
+
+# --- gestion d'erreur
+essaie
+  z = 5
+  z[0] = 1
+attrape e
+  affiche "erreur attrapée:", e
+fin
+
+# --- la syntaxe english marche aussi,混血 compris
+for i in 1 to 3
+  si i % 2 == 0 alors affiche "pair", i fin
+end

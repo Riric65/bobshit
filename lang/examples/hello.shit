@@ -1,0 +1,4 @@
+# hello.shit — le classique
+say "salut, c'est BobShit"
+name = "Bob"
+say "moi c'est", name

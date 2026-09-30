@@ -1,0 +1,82 @@
+# control flow
+n = 7
+if n > 10
+  say "grand"
+elif n > 5
+  say "moyen"
+else
+  say "petit"
+end
+
+# no then, no parens, unterminated style
+if n > 100 say "huge" end
+if (n > 5) then say "cinq plus" end
+
+# else if
+if n == 1 then say "un"
+else if n == 7 then say "sept"
+else say "autre"
+end
+
+# braces
+if n > 5 { say "brace ok" }
+
+# while + break/continue
+i = 0
+while i < 10
+  i = i + 1
+  if i == 3 then continue end
+  if i > 5 then break end
+  say i
+end
+
+# range for
+for i in 1 to 5
+  say i
+end
+for i in 0 to 10 step 2
+  say i
+end
+for i in 5 to 1 step -1
+  say i
+end
+for i in 1 to 10 step 0.5
+  say i
+end
+
+# foreach
+for x in [1, 2, 3]
+  say x * x
+end
+for c in "abc"
+  say c
+end
+for k, v in {a: 1, b: 2}
+  say k, "=", v
+end
+for k in [10, 20]
+  say k
+end
+
+# nested loops with break
+for i in 1 to 3
+  for j in 1 to 3
+    if j == 2 then break end
+    say i, j
+  end
+end
+
+# FR
+k = 0
+tantque k < 2
+  affiche k
+  k = k + 1
+fin
+
+pour i dans 1 jusqua 3
+  affiche i
+fin
+
+pour i dans 0 jusqua 6 pas 2
+  affiche i
+fin

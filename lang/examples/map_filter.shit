@@ -1,0 +1,45 @@
+# map_filter.shit — fonctions d'ordre supérieur, style map/filter/reduce
+fun filter_even xs
+  out = []
+  for x in xs
+    if x % 2 == 0 then push(out, x) end
+  end
+  return out
+end
+
+fun map_twice xs
+  out = []
+  for x in xs
+    push(out, x * 2)
+  end
+  return out
+end
+
+fun reduce_sum xs
+  acc = 0
+  for x in xs
+    acc = acc + x
+  end
+  return acc
+end
+
+say filter_even(range(1, 10))
+say map_twice(range(1, 5))
+say reduce_sum(range(1, 100))
+
+# les fonctions sont des valeurs: on peut les passer autour
+# (attention: `step` et `in` sont des mots réservés, on ne peut pas les
+#  utiliser comme noms de variables)
+fun pipeline xs etapes
+  out = xs
+  for f in etapes
+    out = f(out)
+  end
+  return out
+end
+
+say pipeline(range(1, 6), [filter_even, map_twice])
+
+# sorted avec un comparateur: la lambda renvoie sa dernière expression
+say sort([3, 1, 2])
+say sort([1, -2, 3], fun(a, b) b - a end)
