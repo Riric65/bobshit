@@ -466,6 +466,7 @@ jobs:
             -e VER="$VER" \
             fedora:latest \
             bash -euxc '
+              exec > >(tee /src/dist/rpmbuild.log) 2>&1
               dnf -y install rpm-build gcc make tar gzip >/dev/null
               cd /src
               tar -czf /tmp/bobshit-$VER.tar.gz \
@@ -513,7 +514,16 @@ jobs:
             '
           ls -la dist
 
+      - name: keep the rpmbuild log for diagnosis
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rel-rpm-log
+          path: dist/rpmbuild.log
+          if-no-files-found: ignore
+
       - uses: actions/upload-artifact@v4
+        if: success()
         with:
           name: rel-rpm
           path: dist/*.rpm
@@ -539,7 +549,8 @@ jobs:
           set -eux
           cd all
           rm -f SHASUMS256.txt
-          sha256sum bobshit-* | sort -k2 > SHASUMS256.txt
+          # bobshit* also covers bobshit_0.1.0_amd64.deb
+          sha256sum bobshit* | sort -k2 > SHASUMS256.txt
           ls -la
           cat SHASUMS256.txt
 
@@ -598,6 +609,17 @@ jobs:
             echo
             git log --pretty='- %s' -n 20
           } > "$notes"
+          # if the rpm build failed, park its log in an html comment: invisible
+          # when rendered, readable through the API, so the failure is
+          # diagnosable without opening the runner logs
+          if [ -f all/rpmbuild.log ]; then
+            {
+              echo
+              echo '<!-- rpmbuild log (the Fedora package failed, this is why)'
+              sed 's/^/  /' all/rpmbuild.log | tail -120
+              echo '-->'
+            } >> "$notes"
+          fi
           cat "$notes"
 
       - name: publish
@@ -610,7 +632,9 @@ jobs:
           sha256sum -c SHASUMS256.txt
           shopt -s nullglob
           assets=()
-          for f in bobshit-*; do assets+=("$f"); done
+          # bobshit* and not bobshit-*: the .deb is named with an underscore,
+          # and must not be silently skipped
+          for f in bobshit*; do assets+=("$f"); done
           assets+=(SHASUMS256.txt)
           echo "assets to publish: ${#assets[@]}"
           printf '  %s\n' "${assets[@]}"
