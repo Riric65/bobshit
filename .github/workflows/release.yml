@@ -492,9 +492,10 @@ jobs:
           %prep
           %setup -q -n %{name}-%{version}
           %build
-          make -C lang
+          make -C lang CFLAGS="-std=c11 -O2 -Wall -Wextra" LDFLAGS=""
           %install
-          make -C lang install DESTDIR=%{buildroot} PREFIX=%{_prefix}
+          make -C lang install DESTDIR=%{buildroot} PREFIX=%{_prefix} \
+               CFLAGS="-std=c11 -O2 -Wall -Wextra"
           install -D -m644 LICENSE %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
           %files
           %license %{_datadir}/licenses/%{name}/LICENSE
@@ -617,9 +618,13 @@ jobs:
           if [ -f all/rpmbuild.log ] && [ "${#rpms[@]}" -eq 0 ]; then
             {
               echo
-              echo '<!-- rpmbuild log (the Fedora package failed, this is why)'
-              sed 's/^/  /' all/rpmbuild.log | tail -120
-              echo '-->'
+              echo "### the Fedora package could not be built"
+              echo
+              echo "The last lines of \`rpmbuild\`, for whoever picks this up:"
+              echo
+              echo '```'
+              tail -25 all/rpmbuild.log
+              echo '```'
             } >> "$notes"
           fi
           cat "$notes"
