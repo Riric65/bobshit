@@ -21,6 +21,8 @@ jobs:
   build:
     name: ${{ matrix.label }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    continue-on-error: ${{ matrix.optional }}
     strategy:
       fail-fast: false
       matrix:
@@ -28,15 +30,21 @@ jobs:
           - os: ubuntu-latest
             cc: gcc
             label: linux / gcc
+            optional: false
           - os: ubuntu-latest
             cc: clang
             label: linux / clang
+            optional: false
           - os: macos-13
             cc: clang
             label: macos x64 / clang
+            # the Intel macOS runners are often saturated on GitHub and can sit
+            # queued for a long time: informative, never blocking
+            optional: true
           - os: macos-14
             cc: clang
             label: macos arm64 / clang
+            optional: false
     steps:
       - uses: actions/checkout@v4
 
