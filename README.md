@@ -230,8 +230,32 @@ make test                # joue les 8 exemples
 python3 tests/fuzz.py 42 300   # 300 programmes corrompus, aucun crash attendu
 ```
 
-La CI tourne sur Linux (gcc, clang), macOS (x64 et arm64) et compile pour
-Windows avec mingw-w64, plus une passe ASan/UBSan et un fuzzer.
+Trois scripts rejouent la CI localement, pour ne pas découvrir les erreurs sur
+les runners :
+
+```sh
+./lang/tests/check-ci.sh         # les étapes de la CI reproductibles sur Linux
+./lang/tests/check-workflows.py # syntaxe shell de chaque bloc des workflows
+./lang/tests/check-release.py   # construit les artefacts de release dans un jetable
+```
+
+La CI tourne sur Linux (gcc, clang), macOS (arm64, et x64 en non bloquant) et
+compile pour Windows avec mingw-w64, plus une passe ASan/UBSan et un fuzzer.
+
+### Sortir une release
+
+```sh
+# 1. bumping BS_VERSION in lang/include/common.h, then commit
+# 2. wait for green CI
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+Le tag doit correspondre à `BS_VERSION`, sinon le workflow refuse. Il construit
+le tarball source, les binaires Linux (glibc, musl statique, aarch64), le zip
+Windows avec son installeur, les macOS, un `.deb`, un `.rpm`, publie la release
+avec `SHASUMS256.txt` — le tout depuis le workflow, le dépôt ne portant aucun
+arbre de packaging.
 
 ### Modifier le langage
 

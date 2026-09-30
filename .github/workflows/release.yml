@@ -1,0 +1,569 @@
+name: Release
+
+# Tag and push:
+#   git tag v0.1.0 && git push origin v0.1.0
+#
+# The tag must match BS_VERSION in lang/include/common.h. Everything is built
+# inside this workflow on purpose: the repository carries no packaging tree, so
+# the .deb, the .rpm and the Windows zip are assembled here.
+#
+# Artefacts: source tarball, linux x86_64 (glibc and static musl), linux
+# aarch64, windows x86_64, macOS x64 and arm64, a .deb, an .rpm, and
+# SHASUMS256.txt.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "version to build (must match common.h)"
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CFLAGS_REL: -std=c11 -O2 -Wall -Wextra
+  DOCS: lang/README.md lang/docs/LANGUAGE.md lang/docs/bobshit.1
+
+jobs:
+  # ------------------------------------------------------------- version
+  verify:
+    name: verify the tag
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: v
+        run: |
+          set -eu
+          ver=$(sed -n 's/^#define BS_VERSION "\(.*\)"$/\1/p' lang/include/common.h)
+          test -n "$ver"
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "${GITHUB_REF_TYPE:-tag}" = "tag" ] && [ "$ver" != "$tag" ]; then
+            echo "::error::the tag is v$tag but lang/include/common.h says v$ver"
+            exit 1
+          fi
+          echo "version=$ver" >> "$GITHUB_OUTPUT"
+          echo "building $ver"
+
+      - name: build and test
+        run: |
+          set -eux
+          make -C lang clean
+          make -C lang
+          ./lang/tests/run.sh
+          make -C lang test
+          make -C lang clean
+
+  # ------------------------------------------------------------- source
+  source:
+    name: source tarball
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: deterministic tarball
+        env:
+          VER: ${{ needs.verify.outputs.version }}
+        run: |
+          set -eux
+          stage="$RUNNER_TEMP/stage/bobshit-$VER"
+          mkdir -p "$stage/lang/docs"
+          cp LICENSE README.md .gitignore "$stage/"
+          cp -r lang/Makefile lang/include lang/src lang/examples lang/tests "$stage/lang/"
+          cp lang/README.md "$stage/lang/README.md"
+          cp lang/docs/LANGUAGE.md lang/docs/bobshit.1 "$stage/lang/docs/"
+          chmod +x "$stage/lang/tests/run.sh"
+          find "$stage" -type d -exec chmod 0755 {} +
+          find "$stage" -type f -name '*.sh' -exec chmod 0755 {} +
+          mkdir -p dist
+          tar --sort=name --owner=0 --group=0 --numeric-owner \
+              --mtime='2000-01-01 00:00:00Z' \
+              -czf "dist/bobshit-$VER.tar.gz" -C "$RUNNER_TEMP/stage" "bobshit-$VER"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rel-source
+          path: dist/bobshit-*.tar.gz
+          if-no-files-found: error
+
+  # ------------------------------------------------------------- binaries
+  linux:
+    name: linux ${{ matrix.arch }}
+    needs: verify
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            cc: cc
+            cross: ""
+          - arch: x86_64
+            cc: musl-gcc
+            cross: ""
+            static: true
+          - arch: aarch64
+            cc: aarch64-linux-gnu-gcc
+            cross: cross
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install the toolchain
+        run: |
+          set -eux
+          sudo apt-get update -qq
+          if [ "${{ matrix.cross }}" = cross ]; then
+            sudo apt-get install -y -qq gcc-aarch64-linux-gnu
+          fi
+          if [ "${{ matrix.cc }}" = musl-gcc ]; then
+            sudo apt-get install -y -qq musl-tools
+          fi
+
+      - name: build
+        run: |
+          set -eux
+          make -C lang clean
+          if [ "${{ matrix.cc }}" = musl-gcc ]; then
+            make -C lang CC=musl-gcc CFLAGS="$CFLAGS_REL -static"
+          else
+            make -C lang CC=${{ matrix.cc }} CFLAGS="$CFLAGS_REL"
+          fi
+          ./lang/tests/run.sh
+          make -C lang clean
+
+      - name: stage the archive
+        env:
+          VER: ${{ needs.verify.outputs.version }}
+          ARCH: ${{ matrix.arch }}
+          STATIC: ${{ matrix.static }}
+        run: |
+          set -eux
+          make -C lang >/dev/null
+          mkdir -p dist/stage/examples
+          install -m755 lang/bobshit dist/stage/bobshit
+          strip dist/stage/bobshit || true
+          install -m0644 LICENSE README.md dist/stage/
+          install -m0644 lang/README.md dist/stage/LANGUAGE-README.md
+          install -m0644 lang/docs/LANGUAGE.md dist/stage/
+          install -m0644 lang/examples/*.shit dist/stage/examples/
+          make -C lang clean
+          name="bobshit-$VER-linux-$ARCH"
+          if [ "${STATIC:-}" = true ]; then name="$name-static"; fi
+          tar --sort=name --owner=0 --group=0 --numeric-owner \
+              --mtime='2000-01-01 00:00:00Z' \
+              -czf "dist/$name.tar.gz" -C dist/stage .
+          file dist/stage/bobshit
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rel-linux-${{ matrix.arch }}${{ matrix.static && '-static' || '' }}
+          path: dist/bobshit-*-linux-*.tar.gz
+          if-no-files-found: error
+
+  windows:
+    name: windows x86_64
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install mingw-w64
+        run: |
+          set -eux
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gcc-mingw-w64-x86-64
+
+      - name: cross compile
+        env:
+          VER: ${{ needs.verify.outputs.version }}
+        run: |
+          set -eux
+          x86_64-w64-mingw32-gcc -std=c11 -O2 -Wall -Wextra -static \
+            -Ilang/include -o bobshit.exe lang/src/*.c -lm
+          x86_64-w64-mingw32-strip --strip-unneeded bobshit.exe
+          file bobshit.exe
+          head -c 2 bobshit.exe | grep -q MZ
+
+      - name: assemble the zip
+        env:
+          VER: ${{ needs.verify.outputs.version }}
+        run: |
+          set -eu
+          mkdir -p dist/pack/examples
+          install -m755 bobshit.exe dist/pack/
+          install -m0644 LICENSE README.md dist/pack/
+          install -m0644 lang/docs/LANGUAGE.md dist/pack/
+          install -m0644 lang/examples/*.shit dist/pack/examples/
+          install -m0644 lang/docs/bobshit.1 dist/pack/
+
+          cat > dist/pack/run-shit.cmd <<'CMD'
+          @echo off
+          rem Launcher for the .shit file association: keeps the console open
+          rem so the output stays readable after a double click.
+          "%~dp0bobshit.exe" --hold %*
+          CMD
+
+          cat > dist/pack/install.bat <<'BAT'
+          @echo off
+          rem Per-user installer: no administrator rights needed.
+          rem   1. copy the binary into %LOCALAPPDATA%\bobshit
+          rem   2. add that folder to the user PATH
+          rem   3. register .shit so a double click runs it
+          rem   4. add .SHIT to PATHEXT so "script.shit" works from cmd
+          setlocal
+          set "APPDIR=%LOCALAPPDATA%\bobshit"
+          set "SRCDIR=%~dp0"
+          if not exist "%SRCDIR%bobshit.exe" (
+              echo   [!] bobshit.exe not found next to this script
+              pause
+              exit /b 1
+          )
+          echo   [1/4] installing into %APPDIR%
+          if not exist "%APPDIR%" mkdir "%APPDIR%" >nul
+          copy /Y "%SRCDIR%bobshit.exe"  "%APPDIR%\bobshit.exe"  >nul
+          copy /Y "%SRCDIR%run-shit.cmd" "%APPDIR%\run-shit.cmd" >nul
+          if exist "%SRCDIR%examples" (
+              if not exist "%APPDIR%\examples" mkdir "%APPDIR%\examples" >nul
+              copy /Y "%SRCDIR%examples\*.shit" "%APPDIR%\examples\" >nul
+          )
+          echo   [2/4] adding %APPDIR% to your PATH
+          powershell -NoProfile -Command "$d='%APPDIR%'; $p=[Environment]::GetEnvironmentVariable('Path','User'); if ($p -notlike ('*'+$d+'*')) { [Environment]::SetEnvironmentVariable('Path', (($p + ';' + $d).Trim(';')), 'User') }" >nul
+          set "PATH=%PATH%;%APPDIR%"
+          echo   [3/4] registering the .shit association
+          reg add "HKCU\Software\Classes\.shit" /ve /d "BobShitScript" /f >nul
+          reg add "HKCU\Software\Classes\.shit" /v "Content Type" /t REG_SZ /d "text/plain" /f >nul
+          reg add "HKCU\Software\Classes\BobShitScript" /ve /d "BobShit script" /f >nul
+          reg add "HKCU\Software\Classes\BobShitScript\DefaultIcon" /ve /d "%APPDIR%\bobshit.exe,0" /f >nul
+          reg add "HKCU\Software\Classes\BobShitScript\shell\open\command" /ve /d "\"%APPDIR%\run-shit.cmd\" \"%1\"" /f >nul
+          reg add "HKCU\Software\Classes\Applications\bobshit.exe\shell\open\command" /ve /d "\"%APPDIR%\bobshit.exe\" \"%%1\"" /f >nul
+          echo   [4/4] adding .SHIT to PATHEXT
+          powershell -NoProfile -Command "$x=[Environment]::GetEnvironmentVariable('PATHEXT','Machine'); if ($x -notlike '*.SHIT*') { [Environment]::SetEnvironmentVariable('PATHEXT',$x+';.SHIT','User') }" >nul
+          echo.
+          echo   [done] BobShit is installed.
+          echo     bobshit run script.shit   or   script.shit   or double click a .shit file
+          echo     a new terminal is needed for the PATH change to apply
+          pause
+          BAT
+
+          cat > dist/pack/uninstall.bat <<'UN'
+          @echo off
+          setlocal
+          set "APPDIR=%LOCALAPPDATA%\bobshit"
+          reg delete "HKCU\Software\Classes\.shit" /f >nul 2>&1
+          reg delete "HKCU\Software\Classes\BobShitScript" /f >nul 2>&1
+          reg delete "HKCU\Software\Classes\Applications\bobshit.exe" /f >nul 2>&1
+          powershell -NoProfile -Command "$d='%APPDIR%'; $p=[Environment]::GetEnvironmentVariable('Path','User'); if ($p) { [Environment]::SetEnvironmentVariable('Path', (($p -split ';') | Where-Object { $_ -and $_ -ne $d }) -join ';', 'User') }" >nul
+          if exist "%APPDIR%" rmdir /S /Q "%APPDIR%"
+          echo   [done] BobShit removed
+          pause
+          UN
+
+          cat > dist/pack/README-WINDOWS.txt <<'TXT'
+          BobShit for Windows
+          ====================
+          install:   double click install.bat   (no administrator rights needed)
+          uninstall: double click uninstall.bat
+          run:       bobshit.exe run script.shit
+                     bobshit.exe -e "say 1+1"
+                     bobshit.exe -i
+          A .shit file can be run by double clicking it, like a .bat.
+          The console stays open until you press Enter.
+          TXT
+
+          python3 - dist/pack "dist/bobshit-$VER-windows-x86_64.zip" <<'PY'
+          import os, sys, zipfile
+          src, dest = sys.argv[1], sys.argv[2]
+          with zipfile.ZipFile(dest, "w", zipfile.ZIP_DEFLATED) as zf:
+              for root, dirs, files in os.walk(src):
+                  dirs.sort()
+                  for name in sorted(files):
+                      full = os.path.join(root, name)
+                      rel = os.path.relpath(full, src).replace(os.sep, "/")
+                      info = zipfile.ZipInfo(rel, date_time=(2000, 1, 1, 0, 0, 0))
+                      info.compress_type = zipfile.ZIP_DEFLATED
+                      info.external_attr = 0o644 << 16
+                      with open(full, "rb") as fh:
+                          zf.writestr(info, fh.read())
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rel-windows
+          path: dist/bobshit-*-windows-x86_64.zip
+          if-no-files-found: error
+
+  macos:
+    name: macos ${{ matrix.target }}
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    # the Intel runners are scarce: never block the release on them
+    continue-on-error: ${{ matrix.optional }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            target: arm64
+            optional: false
+          - os: macos-13
+            target: x64
+            optional: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: build, test, stage
+        env:
+          VER: ${{ needs.verify.outputs.version }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -eux
+          make -C lang
+          ./lang/tests/run.sh
+          make -C lang test
+          mkdir -p dist/stage/examples
+          install -m755 lang/bobshit dist/stage/bobshit
+          strip dist/stage/bobshit || true
+          install -m0644 LICENSE README.md dist/stage/
+          install -m0644 lang/docs/LANGUAGE.md dist/stage/
+          install -m0644 lang/examples/*.shit dist/stage/examples/
+          make -C lang clean
+          file dist/stage/bobshit
+          tar -czf "dist/bobshit-$VER-macos-$TARGET.tar.gz" -C dist/stage .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rel-macos-${{ matrix.target }}
+          path: dist/bobshit-*-macos-*.tar.gz
+          if-no-files-found: error
+
+  # ------------------------------------------------------------- packages
+  packages:
+    name: deb and rpm
+    needs: verify
+    runs-on: ubuntu-latest
+    # rpmbuild is not available everywhere: the packages are a bonus, the
+    # release must not depend on them
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install the packaging tools
+        run: |
+          set -eux
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq dpkg-dev rpm
+
+      - name: build
+        run: |
+          set -eux
+          make -C lang
+          ver=$(sed -n 's/^#define BS_VERSION "\(.*\)"$/\1/p' lang/include/common.h)
+          echo "version $ver"
+
+          # ---------------- .deb ----------------
+          D="$RUNNER_TEMP/deb"
+          install -d "$D/DEBIAN" "$D/usr/bin" "$D/usr/share/doc/bobshit/examples" \
+                   "$D/usr/share/man/man1" "$D/usr/share/doc/bobshit"
+          install -m0755 lang/bobshit "$D/usr/bin/bobshit"
+          install -m0644 lang/README.md "$D/usr/share/doc/bobshit/README.md"
+          install -m0644 lang/docs/LANGUAGE.md "$D/usr/share/doc/bobshit/LANGUAGE.md"
+          install -m0644 lang/examples/*.shit "$D/usr/share/doc/bobshit/examples/"
+          install -m0644 LICENSE "$D/usr/share/doc/bobshit/copyright"
+          gzip -9 -n -c lang/docs/bobshit.1 > "$D/usr/share/man/man1/bobshit.1.gz"
+          size=$(du -ks "$D" | cut -f1)
+
+          cat > "$D/DEBIAN/control" <<EOF
+          Package: bobshit
+          Version: $ver
+          Section: interpreters
+          Priority: optional
+          Architecture: amd64
+          Maintainer: Riric65 <riric65@users.noreply.github.com>
+          Installed-Size: $size
+          Depends: libc6 (>= 2.34)
+          Homepage: https://github.com/Riric65/bobshit
+          Description: soft, human-first interpreted programming language
+           BobShit absorbs the chaos instead of complaining: parentheses around
+           conditions, "then", commas, closing "end" keywords and string quotes
+           are all optional. A typo becomes a warning, not an abort.
+           .
+           Every English keyword has a French alias (if/si, while/tantque,
+           for/pour, fun/fonction, say/affiche), case insensitively, and both
+           styles can be mixed in the same file.
+           .
+           This package is the reference C11 interpreter. It needs nothing but
+           libm.
+          EOF
+
+          mkdir -p dist
+          dpkg-deb --root-owner-group --build "$D" "dist/bobshit_${ver}_amd64.deb"
+          dpkg-deb --info "dist/bobshit_${ver}_amd64.deb" | head -6
+
+          # ---------------- rpm ----------------
+          top="$RUNNER_TEMP/rpmbuild"
+          mkdir -p "$top"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
+          cat > "$top/SOURCES/bobshit-$ver.tar.gz.spec" <<EOF
+          %global debug_package %{nil}
+          Name:           bobshit
+          Version:        $ver
+          Release:        1%{?dist}
+          Summary:        Soft, human-first interpreted language with bilingual FR/EN keywords
+          License:        AGPL-3.0-only
+          URL:            https://github.com/Riric65/bobshit
+          Source0:        %{name}-%{version}.tar.gz
+          BuildRequires:  gcc
+          BuildRequires:  make
+          Requires:       glibc
+          %description
+          BobShit absorbs the chaos instead of complaining: parentheses, "then",
+          commas, closing "end" keywords and string quotes are optional. Every
+          English keyword has a French alias and both styles can be mixed.
+          %prep
+          %autosetup -n %{name}-%{version}
+          %build
+          make -C lang
+          %check
+          cd lang && ./tests/run.sh
+          %install
+          make -C lang install DESTDIR=%{buildroot} PREFIX=%{_prefix}
+          %install -D -m644 LICENSE %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
+          %files
+          %license %{_datadir}/licenses/%{name}/LICENSE
+          %{_bindir}/%{name}
+          %{_mandir}/man1/%{name}.1
+          %{_datadir}/doc/%{name}/README.md
+          %{_datadir}/doc/%{name}/LANGUAGE.md
+          %{_datadir}/doc/%{name}/examples
+          %changelog
+          * Mon Sep 30 2026 Riric65 <riric65@users.noreply.github.com> - $ver-1
+          - Initial release
+          EOF
+
+          # rpmbuild wants a plain Source0, so rebuild it from the tree
+          make -C lang clean
+          (cd lang && make)
+          (cd lang && make clean)
+          tar -czf "$top/SOURCES/bobshit-$ver.tar.gz" \
+              --transform "s,^,bobshit-$ver/," \
+              LICENSE README.md lang
+          rpmbuild -bb --define "_topdir $top" --define "dist %{nil}" \
+              "$top/SOURCES/bobshit-$ver.tar.gz.spec"
+          find "$top/RPMS" -name '*.rpm' -exec cp {} dist/ \;
+          rpm -qip dist/*.rpm | head -8
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rel-packages
+          path: |
+            dist/*.deb
+            dist/*.rpm
+          if-no-files-found: warn
+
+  # ------------------------------------------------------------- publish
+  release:
+    name: publish
+    needs: [verify, source, linux, windows, macos, packages]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: all
+          merge-multiple: true
+
+      - name: checksums
+        run: |
+          set -eux
+          cd all
+          rm -f SHASUMS256.txt
+          sha256sum bobshit-* | sort -k2 > SHASUMS256.txt
+          ls -la
+          cat SHASUMS256.txt
+
+      - name: release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          VER: ${{ needs.verify.outputs.version }}
+        run: |
+          set -eu
+          notes="$RUNNER_TEMP/notes.md"
+          {
+            echo "## BobShit $VER"
+            echo
+            echo "Soft, human-first interpreted language. Bilingual FR/EN keywords,"
+            echo "missing parentheses tolerated, \`.shit\` extension. Reference"
+            echo "interpreter in C11, no dependency outside libm."
+            echo
+            echo "### Build from source"
+            echo
+            echo '```sh'
+            echo "git clone https://github.com/Riric65/bobshit.git"
+            echo "cd bobshit/lang && make"
+            echo '```'
+            echo
+            echo "### Artefacts"
+            echo
+            echo "| Platform | File |"
+            echo "| --- | --- |"
+            echo "| any / source | \`bobshit-$VER.tar.gz\` |"
+            echo "| Linux x86_64 | \`bobshit-$VER-linux-x86_64.tar.gz\` |"
+            echo "| Linux x86_64, static musl | \`bobshit-$VER-linux-x86_64-static.tar.gz\` |"
+            echo "| Linux aarch64 | \`bobshit-$VER-linux-aarch64.tar.gz\` |"
+            echo "| Windows x86_64 | \`bobshit-$VER-windows-x86_64.zip\` |"
+            echo "| macOS arm64 | \`bobshit-$VER-macos-arm64.tar.gz\` |"
+            echo "| macOS x64 | \`bobshit-$VER-macos-x64.tar.gz\` |"
+            echo "| Debian / Ubuntu | \`bobshit_${VER}_amd64.deb\` |"
+            echo "| Fedora | \`bobshit-$VER-1.x86_64.rpm\` |"
+            echo
+            echo "On Windows, unzip and double click \`install.bat\`; after that a"
+            echo "\`.shit\` file runs on a double click, like a \`.bat\`."
+            echo
+            echo "### Verify"
+            echo
+            echo '```sh'
+            echo "sha256sum -c SHASUMS256.txt"
+            echo '```'
+            echo
+            echo "### Use"
+            echo
+            echo '```sh'
+            echo "bobshit run hello.shit"
+            echo '```'
+            echo
+            echo "### Changes"
+            echo
+            git log --pretty='- %s' -n 20
+          } > "$notes"
+          cat "$notes"
+
+      - name: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -eux
+          cd all
+          sha256sum -c SHASUMS256.txt
+          args=""
+          for f in bobshit-*; do args="$args $f"; done
+          gh release create "$TAG" \
+            --title "BobShit ${{ needs.verify.outputs.version }}" \
+            --notes-file "$RUNNER_TEMP/notes.md" \
+            $args SHASUMS256.txt
