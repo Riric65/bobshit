@@ -469,10 +469,10 @@ jobs:
               exec > >(tee /src/dist/rpmbuild.log) 2>&1
               dnf -y install rpm-build gcc make tar gzip >/dev/null
               cd /src
+              mkdir -p /tmp/rpmbuild/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
               tar -czf /tmp/rpmbuild/SOURCES/bobshit-$VER.tar.gz \
                   --transform "s,^,bobshit-$VER/," \
                   LICENSE README.md lang
-              mkdir -p /tmp/rpmbuild/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
               cat > /tmp/rpmbuild/SPECS/bobshit.spec <<SPEC
           %global debug_package %{nil}
           Name:           bobshit
