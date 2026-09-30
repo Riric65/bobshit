@@ -500,12 +500,12 @@ jobs:
           %files
           %license %{_datadir}/licenses/%{name}/LICENSE
           %{_bindir}/%{name}
-          %{_mandir}/man1/%{name}.1
+          %{_mandir}/man1/%{name}.1*
           %{_datadir}/doc/%{name}/README.md
           %{_datadir}/doc/%{name}/LANGUAGE.md
           %{_datadir}/doc/%{name}/examples
           %changelog
-          * Mon Sep 30 2026 Riric65 <riric65@users.noreply.github.com> - $VER-1
+          * Wed Sep 30 2026 Riric65 <riric65@users.noreply.github.com> - $VER-1
           - Initial release
           SPEC
               rpmbuild -bb --define "_topdir /tmp/rpmbuild" --define "dist %{nil}" \
