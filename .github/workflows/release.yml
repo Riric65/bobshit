@@ -133,13 +133,17 @@ jobs:
           fi
 
       - name: build
+        env:
+          CC: ${{ matrix.cc }}
+          STATIC: ${{ matrix.static }}
+          ARCH: ${{ matrix.arch }}
         run: |
           set -eux
           make -C lang clean
-          if [ "${{ matrix.cc }}" = musl-gcc ]; then
-            make -C lang CC=musl-gcc CFLAGS="$CFLAGS_REL -static"
+          if [ "$CC" = musl-gcc ]; then
+            make -C lang CC="$CC" CFLAGS="$CFLAGS_REL -static"
           else
-            make -C lang CC=${{ matrix.cc }} CFLAGS="$CFLAGS_REL"
+            make -C lang CC="$CC" CFLAGS="$CFLAGS_REL"
           fi
           # a cross compiled binary cannot be executed on this runner
           if [ "${{ matrix.cross }}" = cross ]; then
@@ -147,7 +151,26 @@ jobs:
           else
             ./lang/tests/run.sh
           fi
-          make -C lang clean
+
+      - name: check the binary matches the target
+        env:
+          CC: ${{ matrix.cc }}
+          STATIC: ${{ matrix.static }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -eux
+          test -x lang/bobshit
+          file lang/bobshit
+          case "$ARCH" in
+            aarch64) file lang/bobshit | grep -q 'ARM aarch64' ;;
+            x86_64)  file lang/bobshit | grep -q 'x86-64' ;;
+          esac
+          if [ "$CC" = musl-gcc ]; then
+            # a static build has no interpreter and no shared libraries
+            ldd lang/bobshit 2>&1 | grep -q 'not a dynamic executable'
+            file lang/bobshit | grep -q 'statically linked'
+          fi
+          ./lang/bobshit -e 'say "the binary runs"'
 
       - name: stage the archive
         env:
@@ -156,7 +179,9 @@ jobs:
           STATIC: ${{ matrix.static }}
         run: |
           set -eux
-          make -C lang >/dev/null
+          # the binary is already built by the previous step: rebuilding it here
+          # without the same CC would silently ship the wrong architecture
+          test -x lang/bobshit
           mkdir -p dist/stage/examples
           install -m755 lang/bobshit dist/stage/bobshit
           strip dist/stage/bobshit || true
@@ -164,13 +189,13 @@ jobs:
           install -m0644 lang/README.md dist/stage/LANGUAGE-README.md
           install -m0644 lang/docs/LANGUAGE.md dist/stage/
           install -m0644 lang/examples/*.shit dist/stage/examples/
-          make -C lang clean
           name="bobshit-$VER-linux-$ARCH"
           if [ "${STATIC:-}" = true ]; then name="$name-static"; fi
           tar --sort=name --owner=0 --group=0 --numeric-owner \
               --mtime='2000-01-01 00:00:00Z' \
               -czf "dist/$name.tar.gz" -C dist/stage .
-          file dist/stage/bobshit
+          file "dist/$name.tar.gz"
+          tar -tzf "dist/$name.tar.gz" | head -5
 
       - uses: actions/upload-artifact@v4
         with:
