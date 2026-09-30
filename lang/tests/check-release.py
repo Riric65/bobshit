@@ -70,6 +70,10 @@ def main():
         ".git", "dist", "__pycache__", "*.o", "*.d", "bobshit"))
 
     env_base = {
+        # step level env vars used by the linux job
+        "CC": "cc",
+        "ARCH": "x86_64",
+        "MATSTATIC": "",
         "RUNNER_TEMP": work,
         "GITHUB_REF_NAME": "v%s" % ver,
         "GITHUB_REF_TYPE": "tag",

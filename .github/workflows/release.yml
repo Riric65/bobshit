@@ -195,7 +195,7 @@ jobs:
               --mtime='2000-01-01 00:00:00Z' \
               -czf "dist/$name.tar.gz" -C dist/stage .
           file "dist/$name.tar.gz"
-          tar -tzf "dist/$name.tar.gz" | head -5
+          tar -tzf "dist/$name.tar.gz" > /dev/null
 
       - uses: actions/upload-artifact@v4
         with:
