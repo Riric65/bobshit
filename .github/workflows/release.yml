@@ -1071,16 +1071,22 @@ jobs:
             echo
             git log --pretty='- %s' -n 20
           } > "$notes"
-          # a job that failed leaves its log attached, and the release notes
-          # print it: without access to the runner logs this is the only way
-          # to see why an artefact is missing
+          # a job leaves its log attached even when it succeeded, so the log is
+          # printed only when the artefact it was supposed to produce is
+          # missing. Without this test the 0.1.1 release announced three
+          # failures that had not happened.
           shopt -s nullglob
-          for pair in "rpmbuild.log:the Fedora package" \
-                      "build.log:the Windows installer" \
-                      "macospkg.log:the macOS installer"; do
-            log="all/${pair%%:*}"
-            what="${pair#*:}"
+          for pair in "rpmbuild.log:the Fedora package:*.rpm" \
+                      "build.log:the Windows installer:*windows-*.exe" \
+                      "macospkg.log:the macOS installer:*.pkg"; do
+            IFS=: read -r name what pattern <<< "$pair"
+            log="all/$name"
             [ -f "$log" ] || continue
+            built=(all/$pattern)
+            if [ "${#built[@]}" -gt 0 ]; then
+              echo "note: $what was built, its log is not a failure" >&2
+              continue
+            fi
             {
               echo
               echo "### $what could not be built"

@@ -30,6 +30,13 @@ franchement : *everything is freed when the process exits*. C'est très rapide e
 - `CHANGELOG.md`, ce fichier, vérifié par la CI : si la version de
   `common.h` n'apparaît pas dans le changelog, la CI échoue.
 
+### Corrigé dans la release
+
+- Les notes de la release annonçaient trois échecs qui n'avaient pas eu lieu :
+  le `.rpm`, l'installeur Windows et le `.pkg` macOS ont tous été produits, et
+  les trois fichiers étaient bien attachés. Le log d'un job est désormais
+  imprimé seulement quand l'artefact correspondant est absent.
+
 ### Corrigé
 
 - Une faute pardonnée n'est plus annoncée comme une erreur. Le lexer disait
