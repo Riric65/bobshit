@@ -36,8 +36,10 @@ EXAMPLES := $(wildcard examples/*.shit)
 
 all: $(BIN)
 
+# CFLAGS is repeated on the link line on purpose: -static, -no-pie and the
+# sanitizer flags only reach the linker that way
 $(BIN): $(OBJ)
-	$(CC) $(LDFLAGS) -o $@ $(OBJ) $(LDLIBS)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(OBJ) $(LDLIBS)
 
 src/%.o: src/%.c
 	$(CC) $(CFLAGS) $(CPPFLAGS) -MMD -MP -c $< -o $@
