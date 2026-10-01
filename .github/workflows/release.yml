@@ -175,15 +175,16 @@ jobs:
           esac
           if [ "$CC" = musl-gcc ]; then
             # a static build has no interpreter and no shared libraries
-            if ldd lang/bobshit 2>&1 | grep -qE 'not a dynamic executable|statically linked'; then
-              echo "linkage statique confirme"
-            else
+            # only `file` is reliable here: glibc's ldd says "not a dynamic
+            # executable" but musl's ldd says "Not a valid dynamic program"
+            file lang/bobshit | grep -qE 'static(ly|-pie) linked' || {
               echo "::error::the musl build is not statically linked"
+              file lang/bobshit
               ldd lang/bobshit || true
               exit 1
-            fi
-            # file dit "statically linked" ou "static-pie linked"
-            file lang/bobshit | grep -qE 'static(ly|-pie) linked'
+            }
+            echo "linkage statique confirme"
+            file lang/bobshit
           fi
           # a cross compiled binary cannot run on this runner
           if [ "${{ matrix.cross }}" = cross ]; then
@@ -747,6 +748,22 @@ jobs:
           echo "upload url: $upload"
           test -n "$upload"
 
+          # the API answers 422 when an asset of that name already exists, so
+          # the previous ones are removed first (this is what
+          # `gh release upload --clobber` does)
+          existing=$(curl -sS "${auth[@]}" "$api/releases/tags/$TAG")
+          for f in "${assets[@]}"; do
+            aid=$(echo "$existing" | jq -r --arg n "$f" \
+                    '.assets[]? | select(.name == $n) | .id' | head -1)
+            if [ -n "$aid" ] && [ "$aid" != "null" ]; then
+              echo "  removing the previous $f (id $aid)"
+              code=$(curl -sS -o /dev/null -w '%{http_code}' -X DELETE \
+                      "${auth[@]}" "$api/releases/assets/$aid")
+              echo "    -> HTTP $code"
+            fi
+          done
+
+          failed=""
           for f in "${assets[@]}"; do
             code=$(curl -sS -o /dev/null -w '%{http_code}' -X POST \
                     -H "Authorization: Bearer $GH_TOKEN" \
@@ -755,9 +772,13 @@ jobs:
             echo "  $f -> HTTP $code"
             case "$code" in
               200|201|204) ;;
-              *) echo "::error::upload of $f failed with HTTP $code"; exit 1 ;;
+              *) failed="$failed $f" ;;
             esac
           done
+          if [ -n "$failed" ]; then
+            echo "::error::these uploads failed:$failed"
+            exit 1
+          fi
 
           # verify through the public API, without the token: if the release is
           # not publicly visible the job has to fail, otherwise a silent
