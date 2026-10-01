@@ -355,6 +355,12 @@ jobs:
           !insertmacro MUI_LANGUAGE "English"
           !insertmacro MUI_LANGUAGE "French"
 
+          ; StrFunc loads its functions from a plugin, and since NSIS 3 that
+          ; has to be declared: without this line StrStr fails to compile
+          Function .onInit
+            ${Using:StrFunc} StrStr
+          FunctionEnd
+
           VIProductVersion "${VER}.0"
           VIAddVersionKey "ProductName"     "${APP}"
           VIAddVersionKey "CompanyName"     "${PUBLISHER}"
