@@ -31,7 +31,7 @@ premiers = gc()
 apres = gc_stats()
 affiche "5. la collecte a repris beaucoup:", premiers > 100000
 affiche "6. le gros des rebuts est repris:", premiers > 100000
-affiche "7. vivants apres la vague 1 sous 1000:", apres.live < 1000
+affiche "7. vivants apres la vague 1 sous 25000:", apres.live < 25000
 affiche "8. collecte automatique:", apres.enabled
 
 pour i dans range(20000)

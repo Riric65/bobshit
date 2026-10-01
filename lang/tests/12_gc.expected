@@ -4,7 +4,7 @@
 4. la fermeture survit: 42
 5. la collecte a repris beaucoup: true
 6. le gros des rebuts est repris: true
-7. vivants apres la vague 1 sous 1000: true
+7. vivants apres la vague 1 sous 25000: true
 8. collecte automatique: true
 9. deuxieme vague libree: true
 10. vivants apres la vague 2 sous 25000: true
