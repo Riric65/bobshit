@@ -1,0 +1,12 @@
+# CRLF: a file saved by a Windows editor must be read exactly like an LF one.
+# This file is stored with CRLF on purpose, see .gitattributes.
+say "1. utf8: caractères accentués, et ça marche"
+
+// 2. an implicitly closed string must not end with a carriage return
+say "2. guillemets non fermés: encore vivant
+
+// 3. ordinary statements around it
+xs = [1, 2
+say xs
+say 1 ?
+say "3. survivant"

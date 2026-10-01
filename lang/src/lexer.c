@@ -405,7 +405,10 @@ TokenStream *lex(const char *src) {
                     continue;
                 }
                 if (d == quote) { i++; closed = 1; break; }
-                if (d == '\n') break; /* soft: strings stop at EOL */
+                /* soft: strings stop at EOL. A CR stops them too, otherwise a
+                 * file saved by a Windows editor would end every implicitly
+                 * closed string with a stray carriage return. */
+                if (d == '\n' || d == '\r') break;
                 str_addc(&s, d);
                 i++;
             }

@@ -1,0 +1,11 @@
+# Every line of .gitattributes exists for one reason: keep the line endings
+# predictable, on every platform, for every checkout.
+#
+# BobShit reads both LF and CRLF, and the regression suite proves it with
+# lang/tests/11_crlf.shit, but the sources themselves stay LF so a diff stays
+# readable and a build stays reproducible.
+* text=auto eol=lf
+
+# The one file that must keep its CRLF, otherwise the test that guards the
+# lexer would stop testing anything.
+lang/tests/11_crlf.shit -text

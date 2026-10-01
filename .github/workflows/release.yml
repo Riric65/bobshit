@@ -273,7 +273,9 @@ jobs:
           file bobshit.exe
           # the windows binary is actually executed, not just cross compiled
           ./bobshit.exe -e 'say "le binaire windows marche"'
-          ./lang/tests/run.sh
+          # -v: a failing test prints its diff, which lands in build.log and
+          # then in the release notes
+          ./lang/tests/run.sh -v
           echo "build windows ok"
       - name: keep the build log
         if: always()
@@ -725,9 +727,10 @@ jobs:
             --identifier org.bobshit.bobshit \
             --version "$VER" \
             --install-location / \
-            --description "BobShit, soft human-first interpreted language" \
             dist/bobshit-component.pkg
-          productbuild --sign - dist/bobshit-component.pkg "dist/bobshit-$VER.pkg"
+          productbuild --sign - \
+            --description "BobShit, soft human-first interpreted language" \
+            dist/bobshit-component.pkg "dist/bobshit-$VER.pkg"
           rm -f dist/bobshit-component.pkg
 
           # it must really be a macOS installer package

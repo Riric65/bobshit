@@ -1,0 +1,9 @@
+1. utf8: caractères accentués, et ça marche
+2. guillemets non fermés: encore vivant
+[1, 2]
+1
+3. survivant
+bobshit: warning: line 6: unterminated string, closed implicitly at end of line
+bobshit: warning: line 11: ignored stray character '?'
+bobshit: parse error: line 10: missing ']', list closed implicitly
+bobshit: 2 warning(s), run with -s to turn them into errors
