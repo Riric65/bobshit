@@ -638,25 +638,24 @@ jobs:
             echo
             echo "| Platform | File |"
             echo "| --- | --- |"
-            # generated from the files that were actually built, so the table
-            # can never advertise a missing download
+            # generated from the files that were actually built, so the
+            # table can never advertise a missing download. The patterns are
+            # ordered from the most specific to the catch all: a bare
+            # *.tar.gz first would swallow every platform archive and they
+            # would all end up labelled "source".
             for f in all/bobshit*; do
               b=$(basename "$f")
               case "$b" in
-                *.tar.gz) kind="source" ;;
-                *linux-x86_64-static*) kind="Linux x86_64, static musl" ;;
-                *linux-x86_64*) kind="Linux x86_64" ;;
-                *linux-aarch64*) kind="Linux aarch64" ;;
-                *windows*) kind="Windows x86_64" ;;
-                *macos-arm64*) kind="macOS arm64" ;;
-                *macos-x64*) kind="macOS x64" ;;
-                *.deb) kind="Debian / Ubuntu" ;;
-                *.rpm) kind="Fedora" ;;
-                *) kind="archive" ;;
-              esac
-              [ "$b" = "SHASUMS256.txt" ] && continue
-              [ "$kind" = "source" ] && case "$b" in
-                *-linux-*|*-macos-*) continue ;;
+                "bobshit-$VER.tar.gz") kind="any / source" ;;
+                *linux-x86_64-static*)  kind="Linux x86_64, static musl" ;;
+                *linux-aarch64*)        kind="Linux aarch64" ;;
+                *linux-x86_64*)         kind="Linux x86_64" ;;
+                *windows-x86_64*)       kind="Windows x86_64" ;;
+                *macos-arm64*)          kind="macOS arm64" ;;
+                *macos-x64*)            kind="macOS x64" ;;
+                *.deb)                  kind="Debian / Ubuntu" ;;
+                *.rpm)                  kind="Fedora" ;;
+                *)                      kind="other" ;;
               esac
               echo "| $kind | \`$b\` |"
             done
