@@ -16,6 +16,9 @@ import tempfile
 
 import yaml
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from check_workflows import StrictLoader  # noqa: E402
+
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 WF = os.path.join(ROOT, ".github", "workflows", "release.yml")
 
@@ -45,7 +48,7 @@ def substitute(script, values):
 
 
 def steps():
-    data = yaml.safe_load(open(WF, encoding="utf-8"))
+    data = yaml.load(open(WF, encoding="utf-8").read(), Loader=StrictLoader)
     for job_name, job in data["jobs"].items():
         for step in job.get("steps") or []:
             if step.get("run"):

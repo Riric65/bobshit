@@ -17,8 +17,28 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 WORKFLOWS = os.path.join(ROOT, ".github", "workflows")
 
 
+class StrictLoader(yaml.SafeLoader):
+    """GitHub rejects a workflow with a duplicate key, so we do too."""
+
+
+def _no_duplicates(loader, node, deep=False):
+    mapping = {}
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node, deep=deep)
+        if key in mapping:
+            raise yaml.constructor.ConstructorError(
+                None, None, f"duplicate key {key!r} (GitHub would reject the file)",
+                key_node.start_mark)
+        mapping[key] = loader.construct_object(value_node, deep=deep)
+    return mapping
+
+
+StrictLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _no_duplicates)
+
+
 def iter_steps(path):
-    data = yaml.safe_load(open(path, encoding="utf-8"))
+    data = yaml.load(open(path, encoding="utf-8"), Loader=StrictLoader)
     for job_name, job in (data.get("jobs") or {}).items():
         for step in job.get("steps") or []:
             run = step.get("run")
@@ -36,6 +56,15 @@ def main():
             continue
         path = os.path.join(WORKFLOWS, name)
         print(f"== {name}")
+        # an invalid workflow is silently replaced by a GitHub stub, so the
+        # YAML has to be checked before anything else
+        try:
+            yaml.load(open(path, encoding="utf-8").read(), Loader=StrictLoader)
+            print("   ok   yaml valide (aucune cle dupliquee)")
+        except Exception as exc:  # noqa: BLE001
+            failures += 1
+            print(f"   FAIL yaml: {exc}")
+            continue
         for job, label, run in iter_steps(path):
             total += 1
             with tempfile.NamedTemporaryFile("w", suffix=".sh", delete=False) as fh:

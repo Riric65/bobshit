@@ -426,9 +426,6 @@ jobs:
     # release: this job is best effort within its timeout
     continue-on-error: true
     timeout-minutes: 10
-    # rpmbuild and dpkg-deb are not available on every runner image: the
-    # packages are a bonus, the release must not depend on them
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -497,7 +494,6 @@ jobs:
     # release: this job is best effort within its timeout
     continue-on-error: true
     timeout-minutes: 20
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
