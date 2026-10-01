@@ -177,7 +177,7 @@ jobs:
             # a static build has no interpreter and no shared libraries
             # only `file` is reliable here: glibc's ldd says "not a dynamic
             # executable" but musl's ldd says "Not a valid dynamic program"
-            file lang/bobshit | grep -qE 'static(ly|-pie) linked' || {
+            file lang/bobshit | grep -qE 'statically linked|static-pie linked' || {
               echo "::error::the musl build is not statically linked"
               file lang/bobshit
               ldd lang/bobshit || true
