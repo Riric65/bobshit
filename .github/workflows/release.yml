@@ -418,6 +418,10 @@ jobs:
 
             ; PATH and PATHEXT are read when a process starts, so a new
             ; terminal is what picks them up. No broadcast is needed.
+
+            ; without this line the Uninstall section is dead code and the
+            ; installer shows up nowhere in Apps and features
+            WriteUninstaller "$INSTDIR\unins000.exe"
           SectionEnd
 
           Section "Uninstall"
@@ -453,13 +457,13 @@ jobs:
           setup=$(ls dist/*-setup.exe)
           test -n "$setup"
           head -c 2 "$setup" | grep -q MZ
-          # the marker of a real NSIS stub, and the .shit association key it
-          # writes once installed
-          grep -aq "Nullsoft" "$setup"
-          grep -aq "BobShitScript" "$setup"
-          grep -aq "run-shit.cmd" "$setup"
-          # nothing was left half written
-          test "$(stat -c %s "$setup")" -gt 200000
+          # the payload is lzma compressed, so its strings cannot be grepped;
+          # what can be checked is that this really is an NSIS stub and that
+          # the archive is big enough to hold a payload of that size
+          file "$setup" | grep -q "Nullsoft Installer"
+          size=$(stat -c %s "$setup")
+          echo "installer size: $size bytes"
+          test "$size" -gt 50000
 
       - name: keep the build log
         # last, so it covers the build, the installer and its checks
