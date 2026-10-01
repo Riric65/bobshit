@@ -16,6 +16,11 @@ __pycache__/
 *.deb
 *.rpm
 *.pkg.tar.zst
+PKGBUILD
+bobshit-*.tar.gz
+bobshit-*.zip
+bobshit-*.exe
+bobshit-*.pkg
 
 # editors
 .vscode/

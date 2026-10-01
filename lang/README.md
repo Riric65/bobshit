@@ -76,7 +76,7 @@ discrète. Concrètement :
 | `then` / `do` | optionnels | acceptés aussi |
 | Virgules dans `say`, listes, maps | optionnelles | acceptées aussi |
 | `end` manquant | le bloc se ferme tout seul | erreur |
-| `]` `}` `)` manquant | fermeture implicite + parse error | arrêt |
+| `]` `}` `)` manquant | fermeture implicite + un warning | arrêt |
 | Chaîne non fermée | fermée en fin de ligne | erreur |
 | Caractère parasite (`?` `` ` `` `~`) | ignoré + warning | erreur |
 | Identifiant inconnu | `nil` + warning | erreur |

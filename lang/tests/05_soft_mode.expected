@@ -27,10 +27,10 @@ deep
 14. survivant
 bobshit: warning: line 7: unterminated string, closed implicitly at end of line
 bobshit: warning: line 41: ignored stray character '?'
-bobshit: parse error: line 9: missing ']', list closed implicitly
-bobshit: parse error: line 11: missing '}', map closed implicitly
-bobshit: parse error: line 66: unexpected ']' in expression
-bobshit: parse error: line 67: unexpected ')' in expression
+bobshit: warning: line 9: missing ']', list closed implicitly
+bobshit: warning: line 11: missing '}', map closed implicitly
+bobshit: warning: line 66: unexpected ']' in expression
+bobshit: warning: line 67: unexpected ')' in expression
 bobshit: warning: line 37: unknown variable 'nope', treated as nil
 bobshit: warning: line 44: division by zero, result is 0
 bobshit: warning: line 44: modulo by zero, result is 0

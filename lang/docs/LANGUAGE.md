@@ -680,7 +680,7 @@ source .shit
 
 | Situation | Message | Comportement soft |
 | --- | --- | --- |
-| bracket non fermé | `bobshit: parse error: line N: missing ']'` | le bracket est fermé, l'exécution continue |
+| bracket non fermé | `bobshit: warning: line N: missing ']'` | le bracket est fermé, l'exécution continue |
 | `end` manquant | `missing 'end' at end of file` | le bloc se ferme |
 | `end` en trop | `unexpected 'end' outside of a block` | ignoré |
 | variable inconnue | `unknown variable 'x', treated as nil` | vaut `nil` |

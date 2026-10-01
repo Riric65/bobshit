@@ -63,6 +63,10 @@ static int accept(Parser *p, TokKind k) {
     return 0;
 }
 
+/* Every recovery point of the parser goes through here. In soft mode the
+ * program is going to run anyway, so calling it an error would be a lie: the
+ * message says warning, like the lexer's own pardons. Strict mode really does
+ * abort, and then it is an error. */
 static void p_error(Parser *p, const char *fmt, ...) {
     va_list ap;
     int line = peek(p)->line;
@@ -70,7 +74,7 @@ static void p_error(Parser *p, const char *fmt, ...) {
     parse_errors++;
     if (bs_quiet) return;
     fflush(stdout);
-    fputs("bobshit: parse error: ", stderr);
+    fputs(bs_soft ? "bobshit: warning: " : "bobshit: parse error: ", stderr);
     if (line > 0) fprintf(stderr, "line %d: ", line);
     va_start(ap, fmt);
     vfprintf(stderr, fmt, ap);
