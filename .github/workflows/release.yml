@@ -71,6 +71,10 @@ jobs:
     name: source tarball
     needs: verify
     runs-on: ubuntu-latest
+    # a saturated GitHub runner must never block the
+    # release: this job is best effort within its timeout
+    continue-on-error: true
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -104,6 +108,10 @@ jobs:
     name: linux ${{ matrix.arch }}
     needs: verify
     runs-on: ubuntu-latest
+    # a saturated GitHub runner must never block the
+    # release: this job is best effort within its timeout
+    continue-on-error: true
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -207,6 +215,10 @@ jobs:
     name: windows x86_64
     needs: verify
     runs-on: ubuntu-latest
+    # a saturated GitHub runner must never block the
+    # release: this job is best effort within its timeout
+    continue-on-error: true
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -339,7 +351,10 @@ jobs:
     name: macos arm64
     needs: verify
     runs-on: macos-14
-    timeout-minutes: 30
+    # a saturated GitHub runner must never block the
+    # release: this job is best effort within its timeout
+    continue-on-error: true
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
 
@@ -407,6 +422,10 @@ jobs:
     name: debian / ubuntu package
     needs: verify
     runs-on: ubuntu-latest
+    # a saturated GitHub runner must never block the
+    # release: this job is best effort within its timeout
+    continue-on-error: true
+    timeout-minutes: 10
     # rpmbuild and dpkg-deb are not available on every runner image: the
     # packages are a bonus, the release must not depend on them
     continue-on-error: true
@@ -474,6 +493,10 @@ jobs:
     name: fedora package
     needs: verify
     runs-on: ubuntu-latest
+    # a saturated GitHub runner must never block the
+    # release: this job is best effort within its timeout
+    continue-on-error: true
+    timeout-minutes: 20
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
@@ -606,15 +629,28 @@ jobs:
             echo
             echo "| Platform | File |"
             echo "| --- | --- |"
-            echo "| any / source | \`bobshit-$VER.tar.gz\` |"
-            echo "| Linux x86_64 | \`bobshit-$VER-linux-x86_64.tar.gz\` |"
-            echo "| Linux x86_64, static musl | \`bobshit-$VER-linux-x86_64-static.tar.gz\` |"
-            echo "| Linux aarch64 | \`bobshit-$VER-linux-aarch64.tar.gz\` |"
-            echo "| Windows x86_64 | \`bobshit-$VER-windows-x86_64.zip\` |"
-            echo "| macOS arm64 | \`bobshit-$VER-macos-arm64.tar.gz\` |"
-            echo "| macOS x64 | \`bobshit-$VER-macos-x64.tar.gz\` |"
-            echo "| Debian / Ubuntu | \`bobshit_${VER}_amd64.deb\` |"
-            echo "| Fedora | \`bobshit-$VER-1.x86_64.rpm\` |"
+            # generated from the files that were actually built, so the table
+            # can never advertise a missing download
+            for f in all/bobshit*; do
+              b=$(basename "$f")
+              case "$b" in
+                *.tar.gz) kind="source" ;;
+                *linux-x86_64-static*) kind="Linux x86_64, static musl" ;;
+                *linux-x86_64*) kind="Linux x86_64" ;;
+                *linux-aarch64*) kind="Linux aarch64" ;;
+                *windows*) kind="Windows x86_64" ;;
+                *macos-arm64*) kind="macOS arm64" ;;
+                *macos-x64*) kind="macOS x64" ;;
+                *.deb) kind="Debian / Ubuntu" ;;
+                *.rpm) kind="Fedora" ;;
+                *) kind="archive" ;;
+              esac
+              [ "$b" = "SHASUMS256.txt" ] && continue
+              [ "$kind" = "source" ] && case "$b" in
+                *-linux-*|*-macos-*) continue ;;
+              esac
+              echo "| $kind | \`$b\` |"
+            done
             echo
             echo "On Windows, unzip and double click \`install.bat\`; after that a"
             echo "\`.shit\` file runs on a double click, like a \`.bat\`."
