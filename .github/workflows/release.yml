@@ -175,10 +175,21 @@ jobs:
           esac
           if [ "$CC" = musl-gcc ]; then
             # a static build has no interpreter and no shared libraries
-            ldd lang/bobshit 2>&1 | grep -q 'not a dynamic executable'
+            if ldd lang/bobshit 2>&1 | grep -q 'not a dynamic executable'; then
+              echo "linkage statique confirme"
+            else
+              echo "::error::the musl build is not statically linked"
+              ldd lang/bobshit || true
+              exit 1
+            fi
             file lang/bobshit | grep -q 'statically linked'
           fi
-          ./lang/bobshit -e 'say "the binary runs"'
+          # a cross compiled binary cannot run on this runner
+          if [ "${{ matrix.cross }}" = cross ]; then
+            echo "cross build: the binary is not executable here, architecture only"
+          else
+            ./lang/bobshit -e 'say "the binary runs"'
+          fi
 
       - name: stage the archive
         env:
