@@ -16,13 +16,30 @@ import tempfile
 
 import yaml
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from check_workflows import StrictLoader  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 WF = os.path.join(ROOT, ".github", "workflows", "release.yml")
 
 GREEN, RED, YEL, OFF = "\033[32m", "\033[31m", "\033[33m", "\033[0m"
+
+
+class StrictLoader(yaml.SafeLoader):
+    """GitHub replaces an invalid workflow by a stub, so duplicates are errors."""
+
+
+def _no_duplicates(loader, node, deep=False):
+    mapping = {}
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node, deep=deep)
+        if key in mapping:
+            raise yaml.constructor.ConstructorError(
+                None, None, f"duplicate key {key!r}", key_node.start_mark)
+        mapping[key] = loader.construct_object(value_node, deep=deep)
+    return mapping
+
+
+StrictLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _no_duplicates)
 
 # GitHub expressions -> shell variables we control here
 EXPRS = {
