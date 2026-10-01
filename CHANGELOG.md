@@ -54,14 +54,17 @@ franchement : *everything is freed when the process exits*. C'est très rapide e
 
 - **La collecte automatique est désactivée par défaut.** Elle fonctionne et
   reprend bien les rebuts : 240 000 valeurs libérées d'un coup sur une boucle
-  de 20 000 tours, le vivant retombant à 55. Mais un collecteur conservateur
-  garde tout ce que la pile machine pointe encore, et les cadres d'une
-  itération précédente restent sur la pile. Après une longue boucle, une
-  collecte unique peut donc laisser 20 000 valeurs marquées, et les suivantes ne
-  les reprennent pas. Le correctif est un pile d'ombres explicite pour les
-  temporaires de l'évaluateur, qui remplace le balayage conservateur : c'est un
-  vrai chantier, pas un detail. `gc()` fonctionne dès maintenant et
-  `gc_stats()` permet de mesurer.
+  de 20 000 tours. Mais un collecteur conservateur garde tout ce que la pile
+  machine pointe encore, et les cadres d'une itération précédente restent sur
+  la pile. Après une longue boucle, une collecte unique peut donc laisser
+  20 000 valeurs marquées, que les suivantes ne reprennent pas. Et c'est
+  instable : la même boucle laisse 55 valeurs vivantes avec gcc sur un fichier,
+  20 057 avec clang, 20 058 avec gcc en `-e`. Ce que la pile pointe décide, et
+  la pile dépend du compilateur et du chemin d'invocation. Le collecteur est
+  donc activable, jamais actif par défaut. Le correctif est un pile d'ombres
+  explicite pour les temporaires de l'évaluateur, qui remplacerait le balayage
+  conservateur : c'est un vrai chantier, pas un détail. `gc()` fonctionne dès
+  maintenant et `gc_stats()` permet de mesurer.
 - L'allocateur ne rend pas les pages à l'OS : le pic mémoire reste au maximum
   atteint, il ne redescend pas.
 - Les `Env` capturés par une closure ne sont jamais libérés. C'est un fuite
