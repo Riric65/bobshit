@@ -20,6 +20,19 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#if defined(_WIN32)
+/* LEAN and NOMINMAX keep windows.h from dragging in macros that could shadow
+ * an identifier of ours; only SetConsoleOutputCP is wanted from it. */
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <io.h>
+#include <fcntl.h>
+#include <windows.h>
+#endif
 
 static void print_version(void) { printf("bobshit %s\n", BS_VERSION); }
 
@@ -127,7 +140,24 @@ static int run_repl(Env *env) {
     return 0;
 }
 
+/* On Windows the C runtime opens stdout in text mode and rewrites every "\n"
+ * into "\r\n". Redirected output would then differ from every other platform,
+ * which breaks the regression suite, pipes, and anything that diffs what the
+ * interpreter printed. Binary mode keeps the bytes identical, but a console
+ * would then step down one line without coming back to the first column, so
+ * the translation is only disabled when the output is a file or a pipe and not
+ * a console. The console code page is also switched to UTF-8, otherwise
+ * accented characters come out mangled on a real terminal. */
+static void use_native_output(void) {
+#if defined(_WIN32)
+    SetConsoleOutputCP(CP_UTF8);
+    if (!_isatty(_fileno(stdout))) _setmode(_fileno(stdout), _O_BINARY);
+    if (!_isatty(_fileno(stderr))) _setmode(_fileno(stderr), _O_BINARY);
+#endif
+}
+
 int main(int argc, char **argv) {
+    use_native_output();
     bs_soft = 1;
 
     const char *file = NULL;
