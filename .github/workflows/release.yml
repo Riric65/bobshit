@@ -207,8 +207,8 @@ jobs:
           install -m755 lang/bobshit dist/stage/bobshit
           strip dist/stage/bobshit || true
           install -m0644 LICENSE README.md dist/stage/
-          install -m0644 lang/README.md dist/stage/LANGUAGE-README.md
           install -m0644 lang/docs/LANGUAGE.md dist/stage/
+          install -m0644 lang/docs/bobshit.1 dist/stage/
           install -m0644 lang/examples/*.shit dist/stage/examples/
           name="bobshit-$VER-linux-$ARCH"
           if [ "${STATIC:-}" = true ]; then name="$name-static"; fi
@@ -225,9 +225,9 @@ jobs:
           if-no-files-found: error
 
   windows:
-    name: windows x86_64
+    name: windows x86_64 installer
     needs: verify
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     # a saturated GitHub runner must never block the
     # release: this job is best effort within its timeout
     continue-on-error: true
@@ -235,129 +235,200 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: install mingw-w64
+      - name: install mingw-w64 and NSIS
+        shell: pwsh
         run: |
-          set -eux
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq gcc-mingw-w64-x86-64
+          choco install --yes --no-progress mingw nsis
+          echo "C:\ProgramData\mingw64\mingw64\bin" | Out-File -Append $env:GITHUB_PATH
+          echo "C:\Program Files (x86)\NSIS" | Out-File -Append $env:GITHUB_PATH
 
-      - name: cross compile
-        env:
-          VER: ${{ needs.verify.outputs.version }}
+      - name: build and run the windows binary
+        shell: bash
         run: |
           set -eux
-          x86_64-w64-mingw32-gcc -std=c11 -O2 -Wall -Wextra -static \
-            -Ilang/include -o bobshit.exe lang/src/*.c -lm
-          x86_64-w64-mingw32-strip --strip-unneeded bobshit.exe
-          file bobshit.exe
+          gcc -std=c11 -O2 -Wall -Wextra -static -Ilang/include \
+            -o bobshit.exe lang/src/*.c -lm
+          strip --strip-unneeded bobshit.exe
           head -c 2 bobshit.exe | grep -q MZ
+          file bobshit.exe
+          # the windows binary is actually executed, not just cross compiled
+          ./bobshit.exe -e 'say "le binaire windows marche"'
+          ./lang/tests/run.sh
 
-      - name: assemble the zip
+      - name: assemble the installer
+        shell: bash
         env:
           VER: ${{ needs.verify.outputs.version }}
         run: |
-          set -eu
-          mkdir -p dist/pack/examples
-          install -m755 bobshit.exe dist/pack/
-          install -m0644 LICENSE README.md dist/pack/
-          install -m0644 lang/docs/LANGUAGE.md dist/pack/
-          install -m0644 lang/examples/*.shit dist/pack/examples/
-          install -m0644 lang/docs/bobshit.1 dist/pack/
+          set -eux
+          rm -rf pack dist
+          mkdir -p pack/examples dist
+          install -m755 bobshit.exe pack/bobshit.exe
+          install -m0644 LICENSE pack/LICENSE.txt
+          install -m0644 README.md pack/README.md
+          install -m0644 lang/docs/LANGUAGE.md pack/LANGUAGE.md
+          install -m0644 lang/docs/bobshit.1 pack/bobshit.1
+          install -m0644 lang/examples/*.shit pack/examples/
+          printf 'AGPL-3.0-only\n' > pack/version.txt
 
-          cat > dist/pack/run-shit.cmd <<'CMD'
+          cat > pack/run-shit.cmd <<'CMD'
           @echo off
-          rem Launcher for the .shit file association: keeps the console open
-          rem so the output stays readable after a double click.
+          rem Launcher for the .shit association: keeps the console open so the
+          rem output stays readable after a double click.
           "%~dp0bobshit.exe" --hold %*
           CMD
 
-          cat > dist/pack/install.bat <<'BAT'
-          @echo off
-          rem Per-user installer: no administrator rights needed.
-          rem   1. copy the binary into %LOCALAPPDATA%\bobshit
-          rem   2. add that folder to the user PATH
-          rem   3. register .shit so a double click runs it
-          rem   4. add .SHIT to PATHEXT so "script.shit" works from cmd
-          setlocal
-          set "APPDIR=%LOCALAPPDATA%\bobshit"
-          set "SRCDIR=%~dp0"
-          if not exist "%SRCDIR%bobshit.exe" (
-              echo   [!] bobshit.exe not found next to this script
-              pause
-              exit /b 1
-          )
-          echo   [1/4] installing into %APPDIR%
-          if not exist "%APPDIR%" mkdir "%APPDIR%" >nul
-          copy /Y "%SRCDIR%bobshit.exe"  "%APPDIR%\bobshit.exe"  >nul
-          copy /Y "%SRCDIR%run-shit.cmd" "%APPDIR%\run-shit.cmd" >nul
-          if exist "%SRCDIR%examples" (
-              if not exist "%APPDIR%\examples" mkdir "%APPDIR%\examples" >nul
-              copy /Y "%SRCDIR%examples\*.shit" "%APPDIR%\examples\" >nul
-          )
-          echo   [2/4] adding %APPDIR% to your PATH
-          powershell -NoProfile -Command "$d='%APPDIR%'; $p=[Environment]::GetEnvironmentVariable('Path','User'); if ($p -notlike ('*'+$d+'*')) { [Environment]::SetEnvironmentVariable('Path', (($p + ';' + $d).Trim(';')), 'User') }" >nul
-          set "PATH=%PATH%;%APPDIR%"
-          echo   [3/4] registering the .shit association
-          reg add "HKCU\Software\Classes\.shit" /ve /d "BobShitScript" /f >nul
-          reg add "HKCU\Software\Classes\.shit" /v "Content Type" /t REG_SZ /d "text/plain" /f >nul
-          reg add "HKCU\Software\Classes\BobShitScript" /ve /d "BobShit script" /f >nul
-          reg add "HKCU\Software\Classes\BobShitScript\DefaultIcon" /ve /d "%APPDIR%\bobshit.exe,0" /f >nul
-          reg add "HKCU\Software\Classes\BobShitScript\shell\open\command" /ve /d "\"%APPDIR%\run-shit.cmd\" \"%1\"" /f >nul
-          reg add "HKCU\Software\Classes\Applications\bobshit.exe\shell\open\command" /ve /d "\"%APPDIR%\bobshit.exe\" \"%%1\"" /f >nul
-          echo   [4/4] adding .SHIT to PATHEXT
-          powershell -NoProfile -Command "$x=[Environment]::GetEnvironmentVariable('PATHEXT','Machine'); if ($x -notlike '*.SHIT*') { [Environment]::SetEnvironmentVariable('PATHEXT',$x+';.SHIT','User') }" >nul
-          echo.
-          echo   [done] BobShit is installed.
-          echo     bobshit run script.shit   or   script.shit   or double click a .shit file
-          echo     a new terminal is needed for the PATH change to apply
-          pause
-          BAT
+          cat > installer.nsi <<'NSI'
+          ; BobShit installer, built with NSIS.
+          ; The version comes from makensis -DVER=... so the script itself
+          ; holds no release specific value.
+          !ifndef VER
+            !define VER "0.0.0"
+          !endif
+          !define APP "BobShit"
+          !define PUBLISHER "Riric65"
+          !define HOMEPAGE "https://github.com/Riric65/bobshit"
 
-          cat > dist/pack/uninstall.bat <<'UN'
-          @echo off
-          setlocal
-          set "APPDIR=%LOCALAPPDATA%\bobshit"
-          reg delete "HKCU\Software\Classes\.shit" /f >nul 2>&1
-          reg delete "HKCU\Software\Classes\BobShitScript" /f >nul 2>&1
-          reg delete "HKCU\Software\Classes\Applications\bobshit.exe" /f >nul 2>&1
-          powershell -NoProfile -Command "$d='%APPDIR%'; $p=[Environment]::GetEnvironmentVariable('Path','User'); if ($p) { [Environment]::SetEnvironmentVariable('Path', (($p -split ';') | Where-Object { $_ -and $_ -ne $d }) -join ';', 'User') }" >nul
-          if exist "%APPDIR%" rmdir /S /Q "%APPDIR%"
-          echo   [done] BobShit removed
-          pause
-          UN
+          Name "${APP} ${VER}"
+          OutFile "dist\bobshit-${VER}-windows-x86_64-setup.exe"
+          Unicode true
+          InstallDir "$PROGRAMFILES64\${APP}"
+          InstallDirRegKey HKLM "Software\${APP}" "InstallDir"
+          RequestExecutionLevel admin
+          SetCompressor /SOLID lzma
 
-          cat > dist/pack/README-WINDOWS.txt <<'TXT'
-          BobShit for Windows
-          ====================
-          install:   double click install.bat   (no administrator rights needed)
-          uninstall: double click uninstall.bat
-          run:       bobshit.exe run script.shit
-                     bobshit.exe -e "say 1+1"
-                     bobshit.exe -i
-          A .shit file can be run by double clicking it, like a .bat.
-          The console stays open until you press Enter.
-          TXT
+          !include "MUI2.nsh"
+          !include "LogicLib.nsh"
+          !include "FileFunc.nsh"
+          !include "WordFunc.nsh"
 
-          python3 - dist/pack "dist/bobshit-$VER-windows-x86_64.zip" <<'PY'
-          import os, sys, zipfile
-          src, dest = sys.argv[1], sys.argv[2]
-          with zipfile.ZipFile(dest, "w", zipfile.ZIP_DEFLATED) as zf:
-              for root, dirs, files in os.walk(src):
-                  dirs.sort()
-                  for name in sorted(files):
-                      full = os.path.join(root, name)
-                      rel = os.path.relpath(full, src).replace(os.sep, "/")
-                      info = zipfile.ZipInfo(rel, date_time=(2000, 1, 1, 0, 0, 0))
-                      info.compress_type = zipfile.ZIP_DEFLATED
-                      info.external_attr = 0o644 << 16
-                      with open(full, "rb") as fh:
-                          zf.writestr(info, fh.read())
-          PY
+          !define MUI_ABORTWARNING
+          !define MUI_FINISHPAGE_RUN "$INSTDIR\bobshit.exe"
+          !define MUI_FINISHPAGE_RUN_TEXT "Open a BobShit console"
+          !insertmacro MUI_PAGE_WELCOME
+          !insertmacro MUI_PAGE_LICENSE "pack\LICENSE.txt"
+          !insertmacro MUI_PAGE_DIRECTORY
+          !insertmacro MUI_PAGE_INSTFILES
+          !insertmacro MUI_PAGE_FINISH
+
+          !insertmacro MUI_UNPAGE_CONFIRM
+          !insertmacro MUI_UNPAGE_INSTFILES
+
+          !insertmacro MUI_LANGUAGE "English"
+          !insertmacro MUI_LANGUAGE "French"
+
+          VIProductVersion "${VER}.0"
+          VIAddVersionKey "ProductName"     "${APP}"
+          VIAddVersionKey "CompanyName"     "${PUBLISHER}"
+          VIAddVersionKey "FileDescription" "BobShit interpreter"
+          VIAddVersionKey "FileVersion"     "${VER}"
+          VIAddVersionKey "ProductVersion"  "${VER}"
+          VIAddVersionKey "LegalCopyright"  "AGPL-3.0-only"
+          VIAddVersionKey "URL"             "${HOMEPAGE}"
+
+          Section "BobShit" SecMain
+            SetOutPath "$INSTDIR"
+            File "pack\bobshit.exe"
+            File "pack\run-shit.cmd"
+            File "pack\README.md"
+            File "pack\LANGUAGE.md"
+            File "pack\LICENSE.txt"
+            File "pack\bobshit.1"
+            File /r "pack\examples"
+
+            WriteRegStr HKLM "Software\${APP}" "InstallDir" "$INSTDIR"
+            WriteRegStr HKLM "Software\${APP}" "Version"  "${VER}"
+
+            ; a start menu console, so the language is usable without a shell
+            CreateDirectory "$SMPROGRAMS\${APP}"
+            CreateShortCut "$SMPROGRAMS\${APP}\${APP} console.lnk" \
+              "$INSTDIR\bobshit.exe" "" "" 0 SW_SHOWNORMAL "" "Read and run .shit scripts"
+
+            ; .shit runs on a double click, like a .bat
+            WriteRegStr HKCR ".shit"                 "" "${APP}Script"
+            WriteRegStr HKCR ".shit\Content Type"     "" "text/plain"
+            WriteRegStr HKCR "${APP}Script"           "" "BobShit script"
+            WriteRegStr HKCR "${APP}Script\DefaultIcon" "" "$INSTDIR\bobshit.exe,0"
+            WriteRegStr HKCR "${APP}Script\shell"     "" "open"
+            WriteRegStr HKCR "${APP}Script\shell\open\command" \
+              "" '"$INSTDIR\run-shit.cmd" "%1"'
+
+            ; bobshit lands in PATH, so `bobshit run hello.shit` works
+            ${GetSize} "PATH" "::NSIS_ENV::PATH" $0
+            ${WordReplace} "$::NSIS_ENV::PATH" ";" ";" "|" "+" $1
+            ${WordFind} "$1" "$INSTDIR" "EQUAL" $2
+            ${If} $2 == ""
+              DetailPrint "adding $INSTDIR to PATH"
+              WriteRegExpandStr HKLM \
+                "SYSTEM\CurrentControlSet\Control\Session Manager\Environment" \
+                "Path" "$::NSIS_ENV::PATH;$INSTDIR"
+              nsExec::ExecToLog 'RUNDLL32.EXE USER32.DLL,UpdatePerUserSystemParameters'
+            ${EndIf}
+
+            ; and .SHIT in PATHEXT, so `hello.shit` works without typing bobshit
+            ${GetSize} "PATHEXT" "::NSIS_ENV::PATHEXT" $0
+            ${WordReplace} "$::NSIS_ENV::PATHEXT" ";" ";" "|" "+" $1
+            ${WordFind} "$1" ".SHIT" "EQUAL" $2
+            ${If} $2 == ""
+              DetailPrint "adding .SHIT to PATHEXT"
+              WriteRegExpandStr HKLM \
+                "SYSTEM\CurrentControlSet\Control\Session Manager\Environment" \
+                "PATHEXT" "$::NSIS_ENV::PATHEXT;.SHIT"
+            ${EndIf}
+          SectionEnd
+
+          Section "Uninstall"
+            Delete "$INSTDIR\bobshit.exe"
+            Delete "$INSTDIR\run-shit.cmd"
+            Delete "$INSTDIR\README.md"
+            Delete "$INSTDIR\LANGUAGE.md"
+            Delete "$INSTDIR\LICENSE.txt"
+            Delete "$INSTDIR\bobshit.1"
+            Delete "$INSTDIR\version.txt"
+            Delete "$INSTDIR\unins000.exe"
+            RMDir /r "$INSTDIR\examples"
+            RMDir /r "$INSTDIR"
+            Delete "$SMPROGRAMS\${APP}\${APP} console.lnk"
+            RMDir "$SMPROGRAMS\${APP}"
+            DeleteRegKey HKCR "${APP}Script"
+            DeleteRegValue HKCR ".shit" ""
+            DeleteRegKey HKLM "Software\${APP}"
+
+            ; pull $INSTDIR back out of PATH
+            ${GetSize} "PATH" "::NSIS_ENV::PATH" $0
+            ${WordReplace} "$::NSIS_ENV::PATH" ";" ";" "|" "+" $1
+            ${WordReplace} "$1" "$INSTDIR" "|" "" "+" $1
+            ${WordReplace} "$1" "||" ";" "" $1
+            WriteRegExpandStr HKLM \
+              "SYSTEM\CurrentControlSet\Control\Session Manager\Environment" \
+              "Path" $1
+            nsExec::ExecToLog 'RUNDLL32.EXE USER32.DLL,UpdatePerUserSystemParameters'
+          SectionEnd
+          NSI
+
+          makensis -V2 -DVER="$VER" installer.nsi
+          ls -la dist/
+          file dist/*.exe
+
+      - name: check the installer
+        shell: bash
+        run: |
+          set -eux
+          setup=$(ls dist/*-setup.exe)
+          test -n "$setup"
+          head -c 2 "$setup" | grep -q MZ
+          # the marker of a real NSIS stub, and the .shit association key it
+          # writes once installed
+          grep -aq "Nullsoft" "$setup"
+          grep -aq "BobShitScript" "$setup"
+          grep -aq "run-shit.cmd" "$setup"
+          # nothing was left half written
+          test "$(stat -c %s "$setup")" -gt 200000
 
       - uses: actions/upload-artifact@v4
         with:
           name: rel-windows
-          path: dist/bobshit-*-windows-x86_64.zip
+          path: dist/bobshit-*-windows-x86_64-setup.exe
           if-no-files-found: error
 
   macos:
@@ -587,10 +658,165 @@ jobs:
           path: dist/*.rpm
           if-no-files-found: error
 
+  macos-pkg:
+    name: macos installer
+    needs: verify
+    runs-on: macos-14
+    # a saturated GitHub runner must never block the
+    # release: this job is best effort within its timeout
+    continue-on-error: true
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: build, test, and wrap the installer
+        env:
+          VER: ${{ needs.verify.outputs.version }}
+        run: |
+          set -eux
+          make -C lang
+          ./lang/tests/run.sh
+
+          root=pkgroot
+          rm -rf "$root" dist
+          mkdir -p "$root/usr/local/bin" "$root/usr/local/share/doc/bobshit/examples" \
+                   "$root/usr/local/share/man/man1" "$root/usr/local/share/licenses/bobshit"
+          install -m755 lang/bobshit "$root/usr/local/bin/bobshit"
+          install -m644 README.md "$root/usr/local/share/doc/bobshit/README.md"
+          install -m644 lang/docs/LANGUAGE.md "$root/usr/local/share/doc/bobshit/LANGUAGE.md"
+          install -m644 lang/examples/*.shit "$root/usr/local/share/doc/bobshit/examples/"
+          install -m644 lang/docs/bobshit.1 "$root/usr/local/share/man/man1/bobshit.1"
+          install -m644 LICENSE "$root/usr/local/share/licenses/bobshit/LICENSE"
+          make -C lang clean
+
+          # a component package, then a signed flat one: arm64 refuses to run
+          # an unsigned package
+          mkdir -p dist
+          pkgbuild --root "$root" \
+            --identifier org.bobshit.bobshit \
+            --version "$VER" \
+            --install-location / \
+            --description "BobShit, soft human-first interpreted language" \
+            dist/bobshit-component.pkg
+          productbuild --sign - dist/bobshit-component.pkg "dist/bobshit-$VER.pkg"
+          rm -f dist/bobshit-component.pkg
+
+          # it must really be a macOS installer package
+          file "dist/bobshit-$VER.pkg"
+          pkgutil --check-signature "dist/bobshit-$VER.pkg" | head -3
+          pkgutil --expand "dist/bobshit-$VER.pkg" /tmp/pkg-expanded
+          ls /tmp/pkg-expanded
+          grep -r "bobshit" /tmp/pkg-expanded/PackageInfo | head -3
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rel-macos-pkg
+          path: dist/bobshit-*.pkg
+          if-no-files-found: error
+
+  arch:
+    name: arch PKGBUILD
+    needs: [verify, linux]
+    runs-on: ubuntu-latest
+    # a saturated GitHub runner must never block the
+    # release: this job is best effort within its timeout
+    continue-on-error: true
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: the linux tarball this package installs
+        uses: actions/download-artifact@v4
+        with:
+          name: rel-linux-x86_64
+          path: tarball
+
+      - name: write the PKGBUILD
+        shell: bash
+        env:
+          VER: ${{ needs.verify.outputs.version }}
+        run: |
+          set -eux
+          ver="$VER"
+          base="https://github.com/Riric65/bobshit/releases/download/v$ver"
+          name="bobshit-$ver-linux-x86_64.tar.gz"
+          test -f "tarball/$name"
+          sum=$(sha256sum "tarball/$name" | cut -d' ' -f1)
+          mkdir -p dist
+          # the placeholders are replaced after the heredoc so that bash never
+          # expands the $pkgdir and $srcdir of the PKGBUILD
+          cat > dist/PKGBUILD <<'PKG'
+          # BobShit: soft, human-first interpreted language, bilingual FR/EN.
+          #
+          # This is a binary package: it installs the interpreter that the
+          # release already built, it does not compile it. One command, like
+          # python:
+          #
+          #     makepkg -si
+          #
+          # Maintainer: Riric65 <riric65@users.noreply.github.com>
+          pkgname=bobshit
+          pkgver=@VER@
+          pkgrel=1
+          pkgdesc='Soft, human-first interpreted language with bilingual FR/EN keywords'
+          arch=('x86_64')
+          url='https://github.com/Riric65/bobshit'
+          license=('AGPL-3.0-only')
+          depends=('glibc')
+          source=('@BASE@/@NAME@')
+          sha256sums=('@SUM@')
+
+          package() {
+            cd "$srcdir"
+            install -Dm755 bobshit "$pkgdir/usr/bin/bobshit"
+            install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+            install -Dm644 LANGUAGE.md "$pkgdir/usr/share/doc/$pkgname/LANGUAGE.md"
+            install -Dm644 bobshit.1 "$pkgdir/usr/share/man/man1/bobshit.1"
+            install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+            install -Dm644 examples/*.shit -t "$pkgdir/usr/share/doc/$pkgname/examples"
+          }
+          PKG
+          sed -i "s|@VER@|$ver|; s|@BASE@|$base|; s|@NAME@|$name|; s|@SUM@|$sum|" dist/PKGBUILD
+          cat dist/PKGBUILD
+          # no placeholder may survive, and no @ may reach a checksum
+          ! grep -q '@' dist/PKGBUILD
+          ! grep -qE 'sha256sums=\(.@' dist/PKGBUILD
+
+      - name: build the package in a real arch container
+        # optional: the PKGBUILD is the deliverable, the ready made package is
+        # a convenience on top of it
+        continue-on-error: true
+        shell: bash
+        env:
+          VER: ${{ needs.verify.outputs.version }}
+        run: |
+          set -eux
+          docker run --rm -v "$PWD:/w" -e VER="$VER" archlinux:base bash -c '
+            set -eu
+            pacman -Sy --noconfirm --needed base-devel fakeroot >/dev/null
+            useradd -m builder
+            chown -R builder /w/dist
+            su builder -c "cd /w/dist && XDG_CACHE_HOME=/home/builder/.cache \
+              makepkg -f --noconfirm --nodeps --noprogressbar"
+          '
+          ls -la dist/
+          # a real pacman package, and it must name the files it installs
+          test -f dist/bobshit-*.pkg.tar.zst
+          tar --zstd -tf dist/bobshit-*.pkg.tar.zst | grep -qx 'usr/bin/bobshit'
+          tar --zstd -tf dist/bobshit-*.pkg.tar.zst | grep -qx 'usr/share/man/man1/bobshit.1'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rel-arch
+          path: |
+            dist/PKGBUILD
+            dist/bobshit-*.pkg.tar.zst
+          if-no-files-found: error
+
   # ------------------------------------------------------------- publish
   release:
     name: publish
-    needs: [verify, source, linux, windows, macos, deb, rpm]
+    needs: [verify, source, linux, windows, macos, macos-pkg, deb, rpm, arch]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -617,9 +843,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: v${{ needs.verify.outputs.version }}
           VER: ${{ needs.verify.outputs.version }}
+          DOWNLOAD: https://github.com/${{ github.repository }}/releases/download/v${{ needs.verify.outputs.version }}
         run: |
           set -eu
           notes="$RUNNER_TEMP/notes.md"
+          # a section is only printed when the artefact it describes was
+          # actually built in this run: the notes never promise a file that
+          # is not attached below
+          have() { [ -e "all/$1" ]; }
           {
             echo "## BobShit $VER"
             echo
@@ -627,53 +858,132 @@ jobs:
             echo "missing parentheses tolerated, \`.shit\` extension. Reference"
             echo "interpreter in C11, no dependency outside libm."
             echo
-            echo "### Build from source"
+            echo "## Install"
+            echo
+
+            if have PKGBUILD; then
+              echo "### Arch, Artix, Manjaro, Endeavour"
+              echo
+              echo '```sh'
+              echo "curl -LO $DOWNLOAD/PKGBUILD"
+              echo "makepkg -si"
+              echo '```'
+              echo
+              echo "\`bobshit\` lands in \`/usr/bin\`, with its man page and its"
+              echo "examples, exactly like \`python\`. A new terminal is needed"
+              echo "before \`bobshit\` is found."
+              if ls all/*.pkg.tar.zst >/dev/null 2>&1; then
+                echo
+                echo "Or install the ready made package:"
+                echo
+                echo '```sh'
+                echo "sudo pacman -U ./$(ls all/*.pkg.tar.zst | xargs -n1 basename)"
+                echo '```'
+              fi
+              echo
+            fi
+
+            if have "bobshit_${VER}_amd64.deb"; then
+              echo "### Debian, Ubuntu, Mint"
+              echo
+              echo '```sh'
+              echo "sudo apt install ./bobshit_${VER}_amd64.deb"
+              echo '```'
+              echo
+            fi
+
+            if have "bobshit-$VER-1.x86_64.rpm"; then
+              echo "### Fedora, RHEL, CentOS Stream"
+              echo
+              echo '```sh'
+              echo "sudo dnf install ./bobshit-$VER-1.x86_64.rpm"
+              echo '```'
+              echo
+            fi
+
+            if have "bobshit-$VER-windows-x86_64-setup.exe"; then
+              echo "### Windows"
+              echo
+              echo "Download \`bobshit-$VER-windows-x86_64-setup.exe\` and run it. It"
+              echo "installs \`bobshit\` under Program Files, adds it to PATH, and"
+              echo "registers \`.shit\` so a double click runs the file. Bilingual"
+              echo "installer. Uninstall from Apps and features."
+              echo
+            fi
+
+            if have "bobshit-$VER.pkg"; then
+              echo "### macOS"
+              echo
+              echo '```sh'
+              echo "installer -pkg bobshit-$VER.pkg -target /"
+              echo '```'
+              echo
+              echo "Or double click the \`.pkg\`. It installs into"
+              echo "\`/usr/local/bin\`, with the man page."
+              echo
+            fi
+
+            echo "### Anywhere else"
+            echo
+            echo "The Linux tarball holds the interpreter, its man page and the"
+            echo "examples:"
+            echo
+            echo '```sh'
+            echo "tar xzf bobshit-$VER-linux-x86_64.tar.gz"
+            echo "install -m755 bobshit /usr/local/bin/"
+            echo '```'
+            echo
+            echo "Or build from the sources, it is one \`make\`:"
             echo
             echo '```sh'
             echo "git clone https://github.com/Riric65/bobshit.git"
-            echo "cd bobshit/lang && make"
+            echo "cd bobshit/lang && make && make install"
             echo '```'
             echo
-            echo "### Artefacts"
+            echo "## After installing"
             echo
-            echo "| Platform | File |"
-            echo "| --- | --- |"
-            # generated from the files that were actually built, so the
-            # table can never advertise a missing download. The patterns are
-            # ordered from the most specific to the catch all: a bare
-            # *.tar.gz first would swallow every platform archive and they
-            # would all end up labelled "source".
-            for f in all/bobshit*; do
-              b=$(basename "$f")
-              case "$b" in
-                "bobshit-$VER.tar.gz") kind="any / source" ;;
-                *linux-x86_64-static*)  kind="Linux x86_64, static musl" ;;
-                *linux-aarch64*)        kind="Linux aarch64" ;;
-                *linux-x86_64*)         kind="Linux x86_64" ;;
-                *windows-x86_64*)       kind="Windows x86_64" ;;
-                *macos-arm64*)          kind="macOS arm64" ;;
-                *macos-x64*)            kind="macOS x64" ;;
-                *.deb)                  kind="Debian / Ubuntu" ;;
-                *.rpm)                  kind="Fedora" ;;
-                *)                      kind="other" ;;
-              esac
-              echo "| $kind | \`$b\` |"
-            done
+            echo '```sh'
+            echo "bobshit run hello.shit   # run a file"
+            echo "bobshit -e 'say 1+1'    # run one line"
+            echo "bobshit -i              # interactive"
+            echo "bobshit --help          # everything else"
+            echo '```'
             echo
-            echo "On Windows, unzip and double click \`install.bat\`; after that a"
-            echo "\`.shit\` file runs on a double click, like a \`.bat\`."
-            echo
-            echo "### Verify"
+            echo "## Verify a download"
             echo
             echo '```sh'
             echo "sha256sum -c SHASUMS256.txt"
             echo '```'
             echo
-            echo "### Use"
+            echo "## All files"
             echo
-            echo '```sh'
-            echo "bobshit run hello.shit"
-            echo '```'
+            echo "| Platform | File |"
+            echo "| --- | --- |"
+            # generated from the files that were actually built, so the table
+            # can never advertise a missing download. The patterns are ordered
+            # from the most specific to the catch all: a bare *.tar.gz first
+            # would swallow every platform archive and they would all end up
+            # labelled "source".
+            for f in all/bobshit* all/PKGBUILD; do
+              [ -e "$f" ] || continue
+              b=$(basename "$f")
+              case "$b" in
+                "bobshit-$VER.tar.gz") kind="any / source" ;;
+                *linux-x86_64-static*)  kind="Linux x86_64, static musl" ;;
+                *linux-aarch64*)        kind="Linux aarch64" ;;
+                *linux-x86_64*)         kind="Linux x86_64, binary" ;;
+                *windows*)              kind="Windows x86_64, installer" ;;
+                *.pkg)                  kind="macOS, installer" ;;
+                *macos-arm64*)          kind="macOS arm64" ;;
+                *macos-x64*)            kind="macOS x64" ;;
+                *.deb)                  kind="Debian / Ubuntu" ;;
+                *.rpm)                  kind="Fedora" ;;
+                *.pkg.tar.zst)          kind="Arch, ready to install" ;;
+                PKGBUILD)               kind="Arch, recipe to build" ;;
+                *)                      kind="other" ;;
+              esac
+              echo "| $kind | \`$b\` |"
+            done
             echo
             echo "### Changes"
             echo
@@ -697,7 +1007,6 @@ jobs:
             } >> "$notes"
           fi
           cat "$notes"
-
       - name: publish
         env:
           GH_TOKEN: ${{ github.token }}

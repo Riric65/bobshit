@@ -69,7 +69,7 @@ def steps():
     for job_name, job in data["jobs"].items():
         for step in job.get("steps") or []:
             if step.get("run"):
-                yield job_name, step.get("name", "?"), step["run"]
+                yield job_name, step.get("name", "?"), step["run"], job.get("runs-on", "")
 
 
 # steps that only install toolchains: they need root, so they cannot be
@@ -102,6 +102,10 @@ def main():
         "VER": ver,
         "TAGNAME": "v%s" % ver,
         "TOKEN": "",
+        "DOWNLOAD": "https://github.com/Riric65/bobshit/releases/download/v0.1.0",
+        # the throwaway copy has no .git, but the release notes end with
+        # `git log`, so it is pointed at the real object store
+        "GIT_DIR": os.path.join(ROOT, ".git"),
         "CCSEL": "cc",
         "CROSS": "",
         "ARCH": "x86_64",
@@ -135,6 +139,9 @@ def main():
                            cwd=cwd or dst, env=env, capture_output=True, text=True)
         return p
 
+    def indent(text, prefix):
+        return "\n".join(prefix + line for line in text.splitlines())
+
     def listing(sub=""):
         d = os.path.join(dst, "dist", sub) if sub else os.path.join(dst, "dist")
         if not os.path.isdir(d):
@@ -143,8 +150,14 @@ def main():
 
     print("version: %s\n" % ver)
 
-    for job, label, script in steps():
+    for job, label, script, runs_on in steps():
         tag = "%s / %s" % (job, label)
+
+        # only the jobs whose runner exists here can be replayed: the windows
+        # and macOS ones need their own machine and their own toolchain
+        if isinstance(runs_on, str) and runs_on and not runs_on.startswith("ubuntu"):
+            print("  %sskip%s  %s (runner %s)" % (YEL, OFF, tag, runs_on))
+            continue
 
         if label in APT_STEPS:
             print("  %sskip%s  %s (installation de toolchain: needs root)" % (YEL, OFF, tag))
@@ -191,6 +204,45 @@ def main():
                 p = run(script)
                 got = [f for f in listing() if f.endswith(ext)]
                 report(tag, p.returncode == 0 and bool(got), p.stderr[-500:])
+
+        elif job == "release" and label == "release notes":
+            # the notes are what a reader of the release actually sees, and
+            # they are built from whatever the other jobs produced, so the
+            # step is replayed here over a synthetic full set of artefacts:
+            # every Install section has to render
+            all_dir = os.path.join(dst, "all")
+            shutil.rmtree(all_dir, ignore_errors=True)
+            os.makedirs(all_dir)
+            for name in (
+                "bobshit-%s.tar.gz" % ver,
+                "bobshit-%s-linux-x86_64.tar.gz" % ver,
+                "bobshit-%s-linux-x86_64-static.tar.gz" % ver,
+                "bobshit-%s-linux-aarch64.tar.gz" % ver,
+                "bobshit-%s-macos-arm64.tar.gz" % ver,
+                "bobshit-%s-macos-x64.tar.gz" % ver,
+                "bobshit-%s-windows-x86_64-setup.exe" % ver,
+                "bobshit-%s.pkg" % ver,
+                "bobshit_%s_amd64.deb" % ver,
+                "bobshit-%s-1.x86_64.rpm" % ver,
+                "bobshit-%s-1-x86_64.pkg.tar.zst" % ver,
+                "PKGBUILD",
+                "SHASUMS256.txt",
+            ):
+                open(os.path.join(all_dir, name), "w").close()
+            notes_file = os.path.join(work, "notes.md")
+            p = run(script, dict(GITHUB_STEP_SUMMARY=notes_file))
+            body = ""
+            if os.path.isfile(notes_file):
+                body = open(notes_file, encoding="utf-8").read()
+            missing = [n for n in (
+                "## Install", "Arch, Artix", "Debian, Ubuntu", "Fedora, RHEL",
+                "### Windows", "### macOS", "### Anywhere else",
+                "sha256sum -c SHASUMS256.txt", "## All files",
+            ) if n not in body]
+            report(tag, p.returncode == 0 and not missing,
+                   p.stderr[-400:] or "sections manquantes: %s" % missing)
+            if body:
+                print(indent(body, "      | "))
 
         elif job == "release":
             print("  %sskip%s  %s (publie sur GitHub)" % (YEL, OFF, tag))

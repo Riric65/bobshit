@@ -90,6 +90,55 @@ say/print/echo/affiche/log   and/et        or/ou         not/non
 true/vrai   false/faux       nil/null/none/rien
 ```
 
+## Installer
+
+Un vrai paquet par distribution, installé comme `python` : le binaire dans
+`/usr/bin`, la page de man, les exemples.
+
+**Arch, Artix, Manjaro, Endeavour**
+
+```sh
+curl -LO https://github.com/Riric65/bobshit/releases/download/v0.1.0/PKGBUILD
+makepkg -si
+```
+
+Ou le paquet déjà construit, sans rien compiler :
+
+```sh
+sudo pacman -U ./bobshit-0.1.0-1-x86_64.pkg.tar.zst
+```
+
+**Debian, Ubuntu, Mint**
+
+```sh
+sudo apt install ./bobshit_0.1.0_amd64.deb
+```
+
+**Fedora, RHEL, CentOS Stream**
+
+```sh
+sudo dnf install ./bobshit-0.1.0-1.x86_64.rpm
+```
+
+**Windows** — télécharge `bobshit-0.1.0-windows-x86_64-setup.exe` et lance-le.
+L'installateur bilingue place `bobshit` dans Program Files, l'ajoute au PATH et
+enregistre l'extension `.shit` : un double-clic exécute le fichier, comme un
+`.bat`. Désinstallation par « Applications et fonctionnalités ».
+
+**macOS**
+
+```sh
+installer -pkg bobshit-0.1.0.pkg -target /
+```
+
+**N'importe quoi d'autre** — l'archive Linux contient l'interpréteur, sa page de
+man et les exemples :
+
+```sh
+tar xzf bobshit-0.1.0-linux-x86_64.tar.gz
+install -m755 bobshit /usr/local/bin/
+```
+
 ## Compiler
 
 `bobshit 0.1.0`, une seule dépendance : un compilateur C11 et `libm`.
@@ -251,11 +300,22 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-Le tag doit correspondre à `BS_VERSION`, sinon le workflow refuse. Il construit
-le tarball source, les binaires Linux (glibc, musl statique, aarch64), le zip
-Windows avec son installeur, les macOS, un `.deb`, un `.rpm`, publie la release
-avec `SHASUMS256.txt` — le tout depuis le workflow, le dépôt ne portant aucun
-arbre de packaging.
+Le tag doit correspondre à `BS_VERSION`, sinon le workflow refuse. Le workflow
+construit et publie lui-même tout ce qu'il attache : l'installateur Windows
+`.exe` (NSIS, avec l'association `.shit`), le `PKGBUILD` Arch et son
+`.pkg.tar.zst`, le `.deb`, le `.rpm`, l'installateur macOS `.pkg`, les binaires
+Linux (glibc, musl statique, aarch64), les tarballs macOS, le tarball source, et
+`SHASUMS256.txt`. Les notes de la release n'annoncent que ce qui a été
+réellement construit dans le run. Le dépôt ne porte aucun arbre de packaging :
+tout est dans le workflow.
+
+Aucun job de build n'est bloquant, et tous ont un timeout : un runner GitHub
+saturé ne doit pas retenir la publication. Pour rejouer une release sans
+détruire la précédente, pousser le tag en force plutôt que le supprimer :
+
+```sh
+git tag -f -a v0.1.0 -m "BobShit 0.1.0" && git push -f origin v0.1.0
+```
 
 ### Modifier le langage
 
