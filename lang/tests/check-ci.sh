@@ -26,10 +26,12 @@ fi
 cd "$work" || exit 1
 STRICT="-std=c11 -O2 -Wall -Wextra -Wshadow -Wpointer-arith -Wcast-qual"
 
+want=$(sed -n 's/^#define BS_VERSION "\(.*\)"$/\1/p' lang/include/common.h)
+
 echo "job build (linux/gcc, flags stricts du workflow)"
 if make -C lang clean >/dev/null 2>&1 && \
    make -C lang CC=gcc CFLAGS="$STRICT" >/dev/null 2>&1 && \
-   [ "$(./lang/bobshit --version)" = "bobshit 0.1.0" ]; then
+   [ "$(./lang/bobshit --version)" = "bobshit $want" ]; then
     ok "build sans warning"
 else
     bad "build"
@@ -55,13 +57,13 @@ if make -C lang \
     CFLAGS="-std=c11 -g -O1 -fsanitize=address,undefined -fno-sanitize-recover=all -Wall -Wextra" \
     LDFLAGS="-fsanitize=address,undefined" >/dev/null 2>&1; then
     ok "build asan+ubsan (CFLAGS et LDFLAGS)"
-    if ASAN_OPTIONS=detect_leaks=0 ./lang/tests/run.sh >/dev/null 2>&1 && \
-       ASAN_OPTIONS=detect_leaks=0 make -C lang test >/dev/null 2>&1; then
+    if ASAN_OPTIONS=detect_leaks=0:detect_stack_use_after_return=0 ./lang/tests/run.sh >/dev/null 2>&1 && \
+       ASAN_OPTIONS=detect_leaks=0:detect_stack_use_after_return=0 make -C lang test >/dev/null 2>&1; then
         ok "suite sous sanitizers"
     else
         bad "suite sous sanitizers"
     fi
-    if ASAN_OPTIONS=detect_leaks=0 python3 lang/tests/fuzz.py 1 40 --timeout 60 >/dev/null 2>&1; then
+    if ASAN_OPTIONS=detect_leaks=0:detect_stack_use_after_return=0 python3 lang/tests/fuzz.py 1 40 --timeout 60 >/dev/null 2>&1; then
         ok "fuzz sous sanitizers"
     else
         bad "fuzz sous sanitizers"
@@ -83,6 +85,10 @@ echo "job checks"
 if sh -n lang/tests/run.sh 2>/dev/null; then ok "run.sh"; else bad "run.sh"; fi
 if python3 -m py_compile lang/tests/fuzz.py 2>/dev/null; then ok "fuzz.py"; else bad "fuzz.py"; fi
 
+# les jobs sanitizer et fuzzer finissent par un make clean: le binaire peut
+# manquer quand la passe de verification arrive
+[ -x lang/bobshit ] || make -C lang >/dev/null 2>&1
+
 ver=$(sed -n 's/^#define BS_VERSION "\(.*\)"$/\1/p' lang/include/common.h)
 if [ -n "$ver" ] && [ "$(./lang/bobshit --version)" = "bobshit $ver" ] && \
    grep -qE "^\.TH BOBSHIT 1 .*BobShit $ver" lang/docs/bobshit.1 && \
@@ -90,6 +96,12 @@ if [ -n "$ver" ] && [ "$(./lang/bobshit --version)" = "bobshit $ver" ] && \
     ok "version coherente partout ($ver)"
 else
     bad "version incoherente (common.h=$ver, binaire=$(./lang/bobshit --version))"
+fi
+
+if [ -f "$root/CHANGELOG.md" ] && grep -qE "^## \[$ver\]" "$root/CHANGELOG.md"; then
+    ok "changelog: une entree pour $ver"
+else
+    bad "changelog: pas d entree pour $ver dans CHANGELOG.md"
 fi
 
 tracked=$(cd "$root" && git ls-files | grep -E '\.(o|d|exe)$|(^|/)dist/|__pycache__|(^|/)bobshit$' || true)

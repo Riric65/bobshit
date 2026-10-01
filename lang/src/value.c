@@ -6,6 +6,8 @@
  */
 #include "value.h"
 
+#include "gc.h"
+
 #include <stdlib.h>
 #include <string.h>
 
@@ -13,8 +15,13 @@
 /* constructors                                                        */
 /* ------------------------------------------------------------------ */
 
+static Env *g_global;
+
+Env *bs_global_env(void) { return g_global; }
+void bs_set_global_env(Env *e) { g_global = e; }
+
 static Value *alloc_value(VKind k) {
-    Value *v = bs_calloc(1, sizeof(Value));
+    Value *v = gc_alloc(sizeof(Value));
     v->k = k;
     return v;
 }
@@ -406,18 +413,6 @@ int v_index_of(const Value *list, const Value *needle) {
 /* ------------------------------------------------------------------ */
 /* environment                                                         */
 /* ------------------------------------------------------------------ */
-
-typedef struct Binding {
-    char *name;
-    Value *v;
-    struct Binding *next;
-} Binding;
-
-struct Env {
-    Binding *vars;
-    Env *parent;
-    int captured; /* a closure refers to this scope: do not free it */
-};
 
 Env *env_new(Env *parent) {
     Env *e = bs_calloc(1, sizeof(Env));

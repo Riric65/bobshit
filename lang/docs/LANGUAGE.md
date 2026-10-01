@@ -749,10 +749,50 @@ fun      := 'fun' IDENT? params? block
 | itérations de boucle | 1 000 000 | `BS_MAX_ITERATIONS` |
 | récupération après bracket oublié | 32 tokens | `skip_to_closer` |
 | profondeur de récursion du parseur | la pile C | — |
-| garbage collector | aucun | — |
+| garbage collector | mark and sweep, opt-in | `--gc` |
 
-Pas de GC : la mémoire des valeurs n'est pas libérée avant la fin du
-processus. Une boucle de 900 000 itérations consomme ~140 Mo.
+### 8.7 Mémoire
+
+Avant 0.1.1 il n'y avait pas de ramasse-miettes : la mémoire des valeurs
+n'était rendue qu'à la sortie du processus. C'est rapide, et ça ne va pas dans
+un serveur ni dans une boucle de jeu.
+
+Depuis 0.1.1 il y en a un, **activé par `--gc`** ou `gc_on()`, désactivé par
+`--no-gc` ou `gc_off()`. Il rend la mémoire au fil de l'exécution, entre deux
+instructions de bloc, jamais au milieu d'une expression.
+
+```shit
+bobshit --gc jeu.shit          # collecte au fil de l'eau
+bobshit jeu.shit               # pas de collecte, tout est rendu à la sortie
+
+affiche gc_stats()             # {live, freed, runs, bytes, enabled}
+n = gc()                       # collecte et rend le nombre de valeurs libérées
+gc_off()                       # éteint depuis le code
+```
+
+`gc_stats()` est la façon de savoir où en est la mémoire :
+
+```shit
+pour i dans range(200000)
+  poubelle = [i, i + 1]        # rien ne survit, tout est rebut
+fin
+affiche gc()                   # un gros nombre
+affiche gc_stats()             # live est retombé
+```
+
+Ce qu'il faut savoir, et qui est mesuré :
+
+- Une collecte reprend bien l'essentiel : 20 000 itérations qui allouent
+  environ 240 000 valeurs, et une collecte en libère 240 000 d'un coup.
+- En revanche un collecteur conservateur garde tout ce que la pile machine
+  pointe encore, et les cadres d'une itération de boucle précédente y
+  restent. Après une longue boucle, une collecte unique peut laisser de l'ordre
+  de 20 000 valeurs marquées, que les suivantes ne reprennent pas. La
+  collecte automatique reste donc **désactivée par défaut** : `gc()` fonctionne,
+  et `gc_stats()` permet de mesurer.
+- L'allocateur ne rend pas ses pages à l'OS : le pic mémoire reste au maximum
+  atteint.
+- Une `Env` capturée par une closure n'est jamais libérée.
 
 ---
 

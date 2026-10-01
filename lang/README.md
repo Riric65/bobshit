@@ -14,7 +14,7 @@ lang/
 
 ## Compiler
 
-`bobshit 0.1.0`, une seule dépendance : un compilateur C11 et `libm`.
+`bobshit 0.1.1`, une seule dépendance : un compilateur C11 et `libm`.
 
 ```sh
 cd lang

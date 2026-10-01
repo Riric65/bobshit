@@ -1,0 +1,55 @@
+# 12. memory: the collector reclaims garbage, and never frees what is live.
+#
+# Assertions: the guard values survive, a collection reclaims the bulk of the
+# garbage, the live set falls back, and the collector can be turned off and on.
+# Every figure is a threshold rather than a raw count, so the expected output is
+# the same for the normal build and the sanitized one: a conservative collector
+# keeps whatever the machine stack still points at, and an instrumented build
+# has much larger frames.
+
+gc_on()
+
+garde = [1, 2, 3]
+texte = "une chaine qui doit survivre"
+fermeure = nil
+compteur = 0
+
+pour i dans range(20000)
+  poubelle = [i, i + 1, {a: i b: "ligne " + str(i)}]
+  si i == 5000
+    fermeure = fun(x) x + 1 fin
+  fin
+  compteur = compteur + 1
+fin
+
+affiche "1. passes:", compteur
+affiche "2. la liste survit:", garde
+affiche "3. la chaine survit:", texte
+affiche "4. la fermeture survit:", fermeure(41)
+
+premiers = gc()
+apres = gc_stats()
+affiche "5. la collecte a repris beaucoup:", premiers > 100000
+affiche "6. le gros des rebuts est repris:", premiers > 100000
+affiche "7. vivants apres la vague 1 sous 1000:", apres.live < 1000
+affiche "8. collecte automatique:", apres.enabled
+
+pour i dans range(20000)
+  poubelle = "encore du rebut " + str(i)
+fin
+deuxieme = gc()
+apres2 = gc_stats()
+affiche "9. deuxieme vague libree:", deuxieme > 50000
+affiche "10. vivants apres la vague 2 sous 25000:", apres2.live < 25000
+
+reste = gc()
+affiche "11. une collecte de plus trouve dix fois moins:", reste * 10 < premiers
+affiche "12. vivants a la fin sous 25000:", gc_stats().live < 25000
+affiche "13. la liste est toujours la:", garde
+affiche "14. la chaine est toujours la:", texte
+
+affiche "15. desactive:", gc_off()
+affiche "16. etat:", gc_stats().enabled
+affiche "17. reactive:", gc_on()
+affiche "18. etat:", gc_stats().enabled
+affiche "19. la liste survit au desactive:", garde

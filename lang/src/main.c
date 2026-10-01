@@ -14,6 +14,7 @@
 #include "ast.h"
 #include "common.h"
 #include "eval.h"
+#include "gc.h"
 #include "lexer.h"
 #include "parser.h"
 
@@ -163,6 +164,7 @@ int main(int argc, char **argv) {
     const char *file = NULL;
     const char *code = NULL;
     int repl = 0, dump_ast = 0, dump_tokens = 0, hold = 0;
+    int gc_flag = -1;
     Env *env = NULL;
 
     for (int i = 1; i < argc; i++) {
@@ -172,6 +174,14 @@ int main(int argc, char **argv) {
         if (strcmp(a, "-h") == 0 || strcmp(a, "--help") == 0) {
             print_help();
             return 0;
+        }
+        if (strcmp(a, "--gc") == 0) {
+            gc_flag = 1;
+            continue;
+        }
+        if (strcmp(a, "--no-gc") == 0) {
+            gc_flag = 0;
+            continue;
         }
         if (strcmp(a, "-v") == 0 || strcmp(a, "--version") == 0) {
             print_version();
@@ -214,6 +224,7 @@ int main(int argc, char **argv) {
 
     if (repl) {
         env = eval_global_env();
+        gc_init(gc_flag == 1);
         return run_repl(env);
     }
 
@@ -266,6 +277,7 @@ int main(int argc, char **argv) {
     }
 
     env = eval_global_env();
+    gc_init(gc_flag == 1);
     eval_run(prog, env);
 
     if (bs_warn_count > 0 && bs_soft)

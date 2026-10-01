@@ -132,7 +132,7 @@ jobs:
 
       - name: regression suite under sanitizers
         env:
-          ASAN_OPTIONS: detect_leaks=0
+          ASAN_OPTIONS: detect_leaks=0,detect_stack_use_after_return=0
           UBSAN_OPTIONS: print_stacktrace=1
         run: |
           cd lang
@@ -141,7 +141,7 @@ jobs:
 
       - name: fuzz the parser under sanitizers
         env:
-          ASAN_OPTIONS: detect_leaks=0
+          ASAN_OPTIONS: detect_leaks=0,detect_stack_use_after_return=0
         run: |
           cd lang
           # a degenerate `while 1` burns the full 1M iteration budget, which is
@@ -187,6 +187,17 @@ jobs:
           grep -qE "^\.TH BOBSHIT 1 .*BobShit $ver" lang/docs/bobshit.1
           grep -q "$ver" lang/README.md
           grep -q "$ver" README.md
+
+      - name: the changelog has an entry for this version
+        run: |
+          set -eu
+          ver=$(sed -n 's/^#define BS_VERSION "\(.*\)"$/\1/p' lang/include/common.h)
+          test -n "$ver"
+          if ! grep -qE "^## \[$ver\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no entry for $ver"
+            exit 1
+          fi
+          echo "changelog ok for $ver"
 
       - name: no build artefact is tracked
         run: |

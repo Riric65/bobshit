@@ -98,29 +98,29 @@ Un vrai paquet par distribution, installé comme `python` : le binaire dans
 **Arch, Artix, Manjaro, Endeavour**
 
 ```sh
-curl -LO https://github.com/Riric65/bobshit/releases/download/v0.1.0/PKGBUILD
+curl -LO https://github.com/Riric65/bobshit/releases/download/v0.1.1/PKGBUILD
 makepkg -si
 ```
 
 Ou le paquet déjà construit, sans rien compiler :
 
 ```sh
-sudo pacman -U ./bobshit-0.1.0-1-x86_64.pkg.tar.zst
+sudo pacman -U ./bobshit-0.1.1-1-x86_64.pkg.tar.zst
 ```
 
 **Debian, Ubuntu, Mint**
 
 ```sh
-sudo apt install ./bobshit_0.1.0_amd64.deb
+sudo apt install ./bobshit_0.1.1_amd64.deb
 ```
 
 **Fedora, RHEL, CentOS Stream**
 
 ```sh
-sudo dnf install ./bobshit-0.1.0-1.x86_64.rpm
+sudo dnf install ./bobshit-0.1.1-1.x86_64.rpm
 ```
 
-**Windows** — télécharge `bobshit-0.1.0-windows-x86_64-setup.exe` et lance-le.
+**Windows** — télécharge `bobshit-0.1.1-windows-x86_64-setup.exe` et lance-le.
 L'installateur bilingue place `bobshit` dans Program Files, l'ajoute au PATH et
 enregistre l'extension `.shit` : un double-clic exécute le fichier, comme un
 `.bat`. Désinstallation par « Applications et fonctionnalités ».
@@ -128,20 +128,20 @@ enregistre l'extension `.shit` : un double-clic exécute le fichier, comme un
 **macOS**
 
 ```sh
-installer -pkg bobshit-0.1.0.pkg -target /
+installer -pkg bobshit-0.1.1.pkg -target /
 ```
 
 **N'importe quoi d'autre** — l'archive Linux contient l'interpréteur, sa page de
 man et les exemples :
 
 ```sh
-tar xzf bobshit-0.1.0-linux-x86_64.tar.gz
+tar xzf bobshit-0.1.1-linux-x86_64.tar.gz
 install -m755 bobshit /usr/local/bin/
 ```
 
 ## Compiler
 
-`bobshit 0.1.0`, une seule dépendance : un compilateur C11 et `libm`.
+`bobshit 0.1.1`, une seule dépendance : un compilateur C11 et `libm`.
 
 ```sh
 git clone https://github.com/Riric65/bobshit.git
@@ -151,6 +151,29 @@ make
 ```
 
 Rien d'autre à installer. Le binaire n'a besoin de rien d'autre que de la libc.
+
+## Mémoire
+
+Depuis 0.1.1 il y a un ramasse-miettes. Il est **opt-in**, parce qu'il garde
+encore ce que la pile machine pointe :
+
+```sh
+bobshit --gc jeu.shit     # collecte au fil de l'eau
+bobshit jeu.shit          # défaut : tout est rendu à la sortie du processus
+```
+
+```shit
+affiche gc_stats()        # {live, freed, runs, bytes, enabled}
+n = gc()                  # collecte, rend le nombre de valeurs libérées
+gc_off()                  # éteint depuis le code
+```
+
+Une boucle de 20 000 tours qui alloue 240 000 valeurs : une collecte en libère
+240 000 d'un coup. Après une longue boucle, une collecte unique peut laisser de
+l'ordre de 20 000 valeurs marquées, que les suivantes ne reprennent pas — un
+collecteur conservateur garde ce que la pile pointe encore. La section 8.7 de
+[`lang/docs/LANGUAGE.md`](lang/docs/LANGUAGE.md) détaille ce qui est mesuré et
+ce qui ne l'est pas.
 
 ## Utiliser
 
@@ -237,10 +260,10 @@ mode soft pardonne, et comment le runtime est construit.
 
 ```
 lang/
-  include/     common.h  lexer.h  ast.h  parser.h  value.h  eval.h
-  src/         common.c  lexer.c  ast.c  parser.c  value.c  eval.c  main.c
+  include/     common.h  lexer.h  ast.h  parser.h  value.h  eval.h  gc.h
+  src/         common.c  lexer.c  ast.c  parser.c  value.c  eval.c  gc.c  main.c
   examples/    8 programmes de démonstration
-  tests/       10 tests de régression + un fuzzer
+  tests/       12 tests de régression + un fuzzer
   docs/        la référence du langage
   Makefile
 ```
@@ -258,14 +281,14 @@ source .shit
  eval_run()      → stdout           eval.c + value.c
 ```
 
-Tree-walk, pas de bytecode : environ 3 900 lignes de C11, **aucune dépendance
+Tree-walk, pas de bytecode : environ 4 400 lignes de C11, **aucune dépendance
 hors `libm`**.
 
 | Propriété | Valeur |
 | --- | --- |
 | Profondeur d'appels | 256 frames |
 | Itérations par boucle | 1 000 000 |
-| Garbage collector | aucun (documenté, assumé en v0.1) |
+| Garbage collector | mark and sweep, opt-in (`--gc`) |
 | Dépendances | `libm` |
 
 ## Développement
@@ -296,8 +319,8 @@ compile pour Windows avec mingw-w64, plus une passe ASan/UBSan et un fuzzer.
 ```sh
 # 1. bumping BS_VERSION in lang/include/common.h, then commit
 # 2. wait for green CI
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.1.1
+git push origin v0.1.1
 ```
 
 Le tag doit correspondre à `BS_VERSION`, sinon le workflow refuse. Le workflow
@@ -314,7 +337,7 @@ saturé ne doit pas retenir la publication. Pour rejouer une release sans
 détruire la précédente, pousser le tag en force plutôt que le supprimer :
 
 ```sh
-git tag -f -a v0.1.0 -m "BobShit 0.1.0" && git push -f origin v0.1.0
+git tag -f -a v0.1.1 -m "BobShit 0.1.1" && git push -f origin v0.1.1
 ```
 
 ### Modifier le langage

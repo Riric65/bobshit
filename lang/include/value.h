@@ -23,8 +23,23 @@ typedef struct {
     NativeFn fn;
 } Native;
 
+typedef struct Binding Binding;
+
+struct Env {
+    Binding *vars;
+    Env *parent;
+    int captured;
+};
+
+struct Binding {
+    char *name;
+    Value *v;
+    Binding *next;
+};
+
 struct Value {
     VKind k;
+    unsigned char gc_mark;
     union {
         int b;
         double n;
@@ -83,6 +98,8 @@ int v_index_of(const Value *list, const Value *needle);
 /* ------------------------------------------------------------------ */
 Env *env_new(Env *parent);
 void env_free(Env *e);
+Env *bs_global_env(void);
+void bs_set_global_env(Env *e);
 /* A closure keeps its defining scope alive: mark it so the call frame does
  * not free it. */
 void env_mark_captured(Env *e);

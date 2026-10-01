@@ -9,6 +9,7 @@
  * expression trees stay readable; `return` values travel in `sig_value`.
  */
 #include "eval.h"
+#include "gc.h"
 
 #include "lexer.h"
 #include "parser.h"
@@ -163,6 +164,7 @@ Value *eval_call(Value *callee, Value **args, int nargs, int line) {
     }
 
     Env *env = env_new(callee->as.fun.env);
+    gc_push_env(env);
     int np = decl->nparams;
     for (int i = 0; i < np; i++)
         env_set(env, decl->params[i], i < nargs ? args[i] : nilv());
@@ -185,6 +187,7 @@ Value *eval_call(Value *callee, Value **args, int nargs, int line) {
     }
     sig = saved_sig;
     sig_value = saved_val;
+    gc_pop_env(env);
     if (!env_is_captured(env)) env_free(env); /* a closure may still need it */
     return result;
 }
@@ -460,6 +463,7 @@ static Value *eval_block_node(Node *n, Env *env) {
     Value *last = nilv();
     if (!n) return last;
     for (int i = 0; i < n->nitems; i++) {
+        gc_maybe_collect();
         last = eval_node(n->items[i], env);
         if (sig != SIG_NONE) return last;
     }
@@ -603,6 +607,50 @@ static Value *eval_node(Node *n, Env *env) {
 #define ARG(i) ((i) < nargs ? args[i] : NULL)
 
 static const char *EMPTY = "";
+
+static Value *bi_gc(Value **args, int nargs, void *ctx) {
+    (void)args;
+    (void)nargs;
+    (void)ctx;
+    if (!gc_enabled()) return nilv();
+    GCStats st;
+    gc_stats(&st);
+    size_t before = st.freed;
+    gc_collect();
+    gc_stats(&st);
+    return v_num((double)(st.freed - before));
+}
+
+static Value *bi_gc_stats(Value **args, int nargs, void *ctx) {
+    (void)args;
+    (void)nargs;
+    (void)ctx;
+    GCStats st;
+    gc_stats(&st);
+    Value *m = v_map();
+    map_set(m, "live", v_num((double)st.live));
+    map_set(m, "freed", v_num((double)st.freed));
+    map_set(m, "runs", v_num((double)st.runs));
+    map_set(m, "bytes", v_num((double)st.bytes));
+    map_set(m, "enabled", v_bool(st.enabled));
+    return m;
+}
+
+static Value *bi_gc_off(Value **args, int nargs, void *ctx) {
+    (void)args;
+    (void)nargs;
+    (void)ctx;
+    gc_set_enabled(0);
+    return v_bool(0);
+}
+
+static Value *bi_gc_on(Value **args, int nargs, void *ctx) {
+    (void)args;
+    (void)nargs;
+    (void)ctx;
+    gc_set_enabled(1);
+    return v_bool(1);
+}
 
 static Value *bi_len(Value **args, int nargs, void *ctx) {
     (void)ctx;
@@ -1063,6 +1111,8 @@ static const Native NATIVES[] = {
     {"round", bi_round},   {"sqrt", bi_sqrt},   {"pow", bi_pow},
     {"min", bi_min},       {"max", bi_max},     {"sum", bi_sum},
     {"input", bi_input},
+    {"gc", bi_gc},         {"gc_stats", bi_gc_stats},
+    {"gc_off", bi_gc_off}, {"gc_on", bi_gc_on},
     {NULL, NULL}
 };
 
@@ -1073,6 +1123,7 @@ static const Native NATIVES[] = {
 Env *eval_global_env(void) {
     Env *g = env_new(NULL);
     for (int i = 0; NATIVES[i].name; i++) env_set(g, NATIVES[i].name, v_native(NATIVES[i].name, NATIVES[i].fn));
+    bs_set_global_env(g);
     return g;
 }
 
@@ -1083,6 +1134,7 @@ Value *eval_run(Node *prog, Env *env) {
     Value *last = nilv();
     if (prog) {
         for (int i = 0; i < prog->nitems; i++) {
+            gc_maybe_collect();
             last = eval_node(prog->items[i], env);
             if (sig == SIG_RETURN) {
                 /* soft: a `return` outside of a function is a no-op */

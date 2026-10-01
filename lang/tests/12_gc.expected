@@ -1,0 +1,19 @@
+1. passes: 20001
+2. la liste survit: [1, 2, 3]
+3. la chaine survit: une chaine qui doit survivre
+4. la fermeture survit: 42
+5. la collecte a repris beaucoup: true
+6. le gros des rebuts est repris: true
+7. vivants apres la vague 1 sous 1000: true
+8. collecte automatique: true
+9. deuxieme vague libree: true
+10. vivants apres la vague 2 sous 25000: true
+11. une collecte de plus trouve dix fois moins: true
+12. vivants a la fin sous 25000: true
+13. la liste est toujours la: [1, 2, 3]
+14. la chaine est toujours la: une chaine qui doit survivre
+15. desactive: false
+16. etat: false
+17. reactive: true
+18. etat: true
+19. la liste survit au desactive: [1, 2, 3]

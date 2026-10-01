@@ -9,7 +9,7 @@
 #include <setjmp.h>
 #include <stddef.h>
 
-#define BS_VERSION "0.1.0"
+#define BS_VERSION "0.1.1"
 
 /* 1 = soft mode (default): the interpreter forgives. 0 = strict (-s). */
 extern int bs_soft;
