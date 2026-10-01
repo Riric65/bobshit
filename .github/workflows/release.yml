@@ -506,6 +506,7 @@ jobs:
           strip dist/stage/bobshit || true
           install -m0644 LICENSE README.md dist/stage/
           install -m0644 lang/docs/LANGUAGE.md dist/stage/
+          install -m0644 lang/docs/bobshit.1 dist/stage/
           install -m0644 lang/examples/*.shit dist/stage/examples/
           make -C lang clean
           file dist/stage/bobshit
@@ -837,6 +838,9 @@ jobs:
           url='https://github.com/Riric65/bobshit'
           license=('AGPL-3.0-only')
           depends=('glibc')
+          # the release archive is already stripped, so without this makepkg
+          # would also emit a bobshit-debug package full of nothing useful
+          options=('!debug')
           source=('@BASE@/@NAME@')
           sha256sums=('@SUM@')
 
