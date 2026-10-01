@@ -245,8 +245,28 @@ jobs:
       - name: build and run the windows binary
         shell: bash
         run: |
-          set -eux
-          gcc -std=c11 -O2 -Wall -Wextra -static -Ilang/include \
+          exec > >(tee build.log) 2>&1
+          set -eu
+          # the compiler is looked up instead of assumed: the image and the
+          # choco package disagree on where mingw lands
+          cc=""
+          for c in gcc x86_64-w64-mingw32-gcc; do
+            if command -v "$c" >/dev/null 2>&1; then cc="$c"; break; fi
+          done
+          for c in /c/mingw64/bin/gcc.exe \
+                   /c/ProgramData/mingw64/mingw64/bin/gcc.exe \
+                   /c/msys64/mingw64/bin/gcc.exe; do
+            if [ -z "$cc" ] && [ -x "$c" ]; then cc="$c"; break; fi
+          done
+          if [ -z "$cc" ]; then
+            echo "::error::no mingw gcc on this runner"
+            where.exe gcc || true
+            ls /c/mingw64/bin 2>/dev/null | head || true
+            exit 1
+          fi
+          echo "compiler: $cc"
+          "$cc" --version | head -1
+          "$cc" -std=c11 -O2 -Wall -Wextra -static -Ilang/include \
             -o bobshit.exe lang/src/*.c -lm
           strip --strip-unneeded bobshit.exe
           head -c 2 bobshit.exe | grep -q MZ
@@ -254,6 +274,14 @@ jobs:
           # the windows binary is actually executed, not just cross compiled
           ./bobshit.exe -e 'say "le binaire windows marche"'
           ./lang/tests/run.sh
+          echo "build windows ok"
+      - name: keep the build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rel-windows-log
+          path: build.log
+          if-no-files-found: ignore
 
       - name: assemble the installer
         shell: bash
@@ -673,7 +701,8 @@ jobs:
         env:
           VER: ${{ needs.verify.outputs.version }}
         run: |
-          set -eux
+          exec > >(tee macospkg.log) 2>&1
+          set -eu
           make -C lang
           ./lang/tests/run.sh
 
@@ -703,12 +732,27 @@ jobs:
 
           # it must really be a macOS installer package
           file "dist/bobshit-$VER.pkg"
-          pkgutil --check-signature "dist/bobshit-$VER.pkg" | head -3
+          pkgutil --check-signature "dist/bobshit-$VER.pkg" || true
+          rm -rf /tmp/pkg-expanded
           pkgutil --expand "dist/bobshit-$VER.pkg" /tmp/pkg-expanded
           ls /tmp/pkg-expanded
-          grep -r "bobshit" /tmp/pkg-expanded/PackageInfo | head -3
+          grep -q "org.bobshit.bobshit" /tmp/pkg-expanded/PackageInfo || {
+            echo "::error::the expanded package does not name BobShit"
+            cat /tmp/pkg-expanded/PackageInfo | head -20
+            exit 1
+          }
+          echo "build macos ok"
+
+      - name: keep the build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rel-macospkg-log
+          path: macospkg.log
+          if-no-files-found: ignore
 
       - uses: actions/upload-artifact@v4
+        if: success()
         with:
           name: rel-macos-pkg
           path: dist/bobshit-*.pkg
@@ -989,23 +1033,27 @@ jobs:
             echo
             git log --pretty='- %s' -n 20
           } > "$notes"
-          # if the rpm build failed, park its log in an html comment: invisible
-          # when rendered, readable through the API, so the failure is
-          # diagnosable without opening the runner logs
+          # a job that failed leaves its log attached, and the release notes
+          # print it: without access to the runner logs this is the only way
+          # to see why an artefact is missing
           shopt -s nullglob
-          rpms=(all/*.rpm)
-          if [ -f all/rpmbuild.log ] && [ "${#rpms[@]}" -eq 0 ]; then
+          for pair in "rpmbuild.log:the Fedora package" \
+                      "build.log:the Windows installer" \
+                      "macospkg.log:the macOS installer"; do
+            log="all/${pair%%:*}"
+            what="${pair#*:}"
+            [ -f "$log" ] || continue
             {
               echo
-              echo "### the Fedora package could not be built"
+              echo "### $what could not be built"
               echo
-              echo "The last lines of \`rpmbuild\`, for whoever picks this up:"
+              echo "Last lines of the build log, for whoever picks this up:"
               echo
               echo '```'
-              tail -25 all/rpmbuild.log
+              tail -25 "$log"
               echo '```'
             } >> "$notes"
-          fi
+          done
           cat "$notes"
       - name: publish
         env:
