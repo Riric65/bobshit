@@ -723,15 +723,22 @@ jobs:
           # a component package, then a signed flat one: arm64 refuses to run
           # an unsigned package
           mkdir -p dist
+          # a component package is enough for `installer -pkg`: the root is
+          # laid out exactly as it must land on disk, under /usr/local
           pkgbuild --root "$root" \
             --identifier org.bobshit.bobshit \
             --version "$VER" \
             --install-location / \
-            dist/bobshit-component.pkg
-          productbuild --sign - \
-            --description "BobShit, soft human-first interpreted language" \
-            dist/bobshit-component.pkg "dist/bobshit-$VER.pkg"
-          rm -f dist/bobshit-component.pkg
+            dist/bobshit-$VER.pkg
+          # a signed flat package is nicer, and arm64 asks for one, but it is
+          # not worth losing the installer over
+          if productbuild --package "dist/bobshit-$VER.pkg" --sign - \
+                           "dist/bobshit-$VER-flat.pkg"; then
+            mv "dist/bobshit-$VER-flat.pkg" "dist/bobshit-$VER.pkg"
+            echo "signed flat package"
+          else
+            echo "::warning::productbuild failed, shipping the component package"
+          fi
 
           # it must really be a macOS installer package
           file "dist/bobshit-$VER.pkg"
@@ -1053,7 +1060,7 @@ jobs:
               echo "Last lines of the build log, for whoever picks this up:"
               echo
               echo '```'
-              tail -25 "$log"
+              tail -200 "$log"
               echo '```'
             } >> "$notes"
           done

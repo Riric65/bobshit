@@ -27,6 +27,7 @@ for src in tests/*.shit; do
     exp="tests/$name.expected"
     out=$(mktemp)
     err=$(mktemp)
+    cmp=$(mktemp)
 
     if [ "$name" = "strict_abort" ]; then
         $BS -s "$src" >"$out" 2>"$err"
@@ -60,11 +61,16 @@ for src in tests/*.shit; do
         failed_list="$failed_list $name"
         echo "FAIL $name"
         if [ "$verbose" = 1 ]; then
-            printf '--- expected ---\n'; cat "$exp"
-            printf '--- got ---\n';      printf '%s\n' "$got"
+            # Only the differing lines, not both files: a full dump of two
+            # 200 line files hides the two lines that matter. And the format
+            # goes through an argument, never as the format itself, so a
+            # leading dash cannot be read as an option by the printf builtin.
+            printf '%s\n' "$got" > "$cmp"
+            echo "--- $name: what differs ---"
+            diff "$exp" "$cmp" | head -14 || true
         fi
     fi
-    rm -f "$out" "$err"
+    rm -f "$out" "$err" "$cmp"
 done
 
 echo
