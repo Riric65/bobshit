@@ -277,20 +277,28 @@ jobs:
           # then in the release notes
           ./lang/tests/run.sh -v
           echo "build windows ok"
-      - name: keep the build log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: rel-windows-log
-          path: build.log
-          if-no-files-found: ignore
-
       - name: assemble the installer
         shell: bash
         env:
           VER: ${{ needs.verify.outputs.version }}
         run: |
-          set -eux
+          exec > >(tee -a build.log) 2>&1
+          set -eu
+          # makensis is looked up the same way as the compiler: the choco
+          # package and the preinstalled copy may disagree
+          ns=""
+          command -v makensis >/dev/null 2>&1 && ns=makensis
+          for c in "/c/Program Files (x86)/NSIS/makensis.exe" \
+                   "/c/Program Files/NSIS/makensis.exe"; do
+            [ -n "$ns" ] || { [ -x "$c" ] && ns="$c"; }
+          done
+          if [ -z "$ns" ]; then
+            echo "::error::makensis not found on this runner"
+            ls "/c/Program Files (x86)" 2>/dev/null | head -20 || true
+            exit 1
+          fi
+          echo "nsis: $ns"
+          "$ns" -VERSION
           rm -rf pack dist
           mkdir -p pack/examples dist
           install -m755 bobshit.exe pack/bobshit.exe
@@ -436,14 +444,15 @@ jobs:
           SectionEnd
           NSI
 
-          makensis -V2 -DVER="$VER" installer.nsi
+          "$ns" -V2 -DVER="$VER" installer.nsi
           ls -la dist/
           file dist/*.exe
 
       - name: check the installer
         shell: bash
         run: |
-          set -eux
+          exec > >(tee -a build.log) 2>&1
+          set -eu
           setup=$(ls dist/*-setup.exe)
           test -n "$setup"
           head -c 2 "$setup" | grep -q MZ
@@ -455,7 +464,17 @@ jobs:
           # nothing was left half written
           test "$(stat -c %s "$setup")" -gt 200000
 
+      - name: keep the build log
+        # last, so it covers the build, the installer and its checks
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rel-windows-log
+          path: build.log
+          if-no-files-found: ignore
+
       - uses: actions/upload-artifact@v4
+        if: success()
         with:
           name: rel-windows
           path: dist/bobshit-*-windows-x86_64-setup.exe
