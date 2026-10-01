@@ -912,7 +912,11 @@ jobs:
           cd all
           rm -f SHASUMS256.txt
           # bobshit* also covers bobshit_0.1.0_amd64.deb
-          sha256sum bobshit* | sort -k2 > SHASUMS256.txt
+          shopt -s nullglob
+          files=(bobshit*)
+          if [ -f PKGBUILD ]; then files+=(PKGBUILD); fi
+          echo "checksumming ${#files[@]} files"
+          sha256sum "${files[@]}" | sort -k2 > SHASUMS256.txt
           ls -la
           cat SHASUMS256.txt
 
@@ -1104,6 +1108,9 @@ jobs:
           # bobshit* and not bobshit-*: the .deb is named with an underscore,
           # and must not be silently skipped
           for f in bobshit*; do assets+=("$f"); done
+          # the PKGBUILD is named PKGBUILD, so the glob above never saw it,
+          # and the install instructions told everyone to download it
+          if [ -f PKGBUILD ]; then assets+=(PKGBUILD); fi
           assets+=(SHASUMS256.txt)
           echo "assets to publish: ${#assets[@]}"
           printf '  %s\n' "${assets[@]}"
