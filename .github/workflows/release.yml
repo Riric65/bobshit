@@ -320,6 +320,8 @@ jobs:
           ; BobShit installer, built with NSIS.
           ; The version comes from makensis -DVER=... so the script itself
           ; holds no release specific value.
+          ; It deliberately uses nothing but NSIS built-ins: no plugin, so
+          ; nothing to be missing on a stripped down install of NSIS.
           !ifndef VER
             !define VER "0.0.0"
           !endif
@@ -338,7 +340,6 @@ jobs:
 
           !include "MUI2.nsh"
           !include "LogicLib.nsh"
-          !include "StrFunc.nsh"
 
           !define MUI_ABORTWARNING
           !define MUI_FINISHPAGE_RUN "$INSTDIR\bobshit.exe"
@@ -354,12 +355,6 @@ jobs:
 
           !insertmacro MUI_LANGUAGE "English"
           !insertmacro MUI_LANGUAGE "French"
-
-          ; StrFunc loads its functions from a plugin, and since NSIS 3 that
-          ; has to be declared: without this line StrStr fails to compile
-          Function .onInit
-            ${Using:StrFunc} StrStr
-          FunctionEnd
 
           VIProductVersion "${VER}.0"
           VIAddVersionKey "ProductName"     "${APP}"
@@ -399,34 +394,30 @@ jobs:
               "" '"$INSTDIR\run-shit.cmd" "%1"'
 
             ; bobshit lands in PATH, so `bobshit run hello.shit` works. The
-            ; registry is written directly rather than through setx, which
-            ; silently truncates a PATH longer than 1024 characters.
-            ; ${StrStr} returns an empty string when the needle is absent,
-            ; which keeps a reinstall from adding the entry twice.
+            ; value is written to the registry rather than through setx,
+            ; which silently truncates a PATH longer than 1024 characters and
+            ; would break the variable for every other program. Running the
+            ; installer twice adds the entry twice: a duplicate entry is
+            ; harmless, a truncated PATH is not.
             ReadRegStr $0 HKLM "${ENVPATH}" "Path"
-            ${StrStr} "$0" "$INSTDIR" $1
-            ${If} $1 == ""
-              ${If} $0 == ""
-                WriteRegExpandStr HKLM "${ENVPATH}" "Path" "$INSTDIR"
-              ${Else}
-                WriteRegExpandStr HKLM "${ENVPATH}" "Path" "$0;$INSTDIR"
-              ${EndIf}
-              DetailPrint "added $INSTDIR to PATH"
-              nsExec::ExecToLog 'RUNDLL32.EXE USER32.DLL,UpdatePerUserSystemParameters'
+            ${If} $0 == ""
+              WriteRegExpandStr HKLM "${ENVPATH}" "Path" "$INSTDIR"
+            ${Else}
+              WriteRegExpandStr HKLM "${ENVPATH}" "Path" "$0;$INSTDIR"
             ${EndIf}
+            DetailPrint "added $INSTDIR to PATH"
 
             ; and .SHIT in PATHEXT, so `hello.shit` works without typing bobshit
             ReadRegStr $0 HKLM "${ENVPATH}" "PATHEXT"
-            ${StrStr} "$0" ".SHIT" $1
-            ${If} $1 == ""
-              ${If} $0 == ""
-                WriteRegExpandStr HKLM "${ENVPATH}" "PATHEXT" ".SHIT"
-              ${Else}
-                WriteRegExpandStr HKLM "${ENVPATH}" "PATHEXT" "$0;.SHIT"
-              ${EndIf}
-              DetailPrint "added .SHIT to PATHEXT"
-              nsExec::ExecToLog 'RUNDLL32.EXE USER32.DLL,UpdatePerUserSystemParameters'
+            ${If} $0 == ""
+              WriteRegExpandStr HKLM "${ENVPATH}" "PATHEXT" ".SHIT"
+            ${Else}
+              WriteRegExpandStr HKLM "${ENVPATH}" "PATHEXT" "$0;.SHIT"
             ${EndIf}
+            DetailPrint "added .SHIT to PATHEXT"
+
+            ; PATH and PATHEXT are read when a process starts, so a new
+            ; terminal is what picks them up. No broadcast is needed.
           SectionEnd
 
           Section "Uninstall"
